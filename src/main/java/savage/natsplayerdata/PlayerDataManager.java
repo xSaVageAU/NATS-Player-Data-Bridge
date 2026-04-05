@@ -30,6 +30,10 @@ public class PlayerDataManager {
         UUID uuid = player.getUUID();
         
         try {
+            // Force save stats and advancements to disk before reading
+            server.getPlayerList().getPlayerStats(player).save();
+            server.getPlayerList().getPlayerAdvancements(player).save();
+
             // 1. Capture LIVE NBT (Inventory, EnderChest, Attributes, XP, etc.)
             net.minecraft.world.level.storage.TagValueOutput output = net.minecraft.world.level.storage.TagValueOutput.createWithContext(net.minecraft.util.ProblemReporter.DISCARDING, server.registryAccess());
             player.saveWithoutId(output);
