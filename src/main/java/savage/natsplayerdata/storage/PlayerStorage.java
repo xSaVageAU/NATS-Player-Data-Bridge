@@ -48,9 +48,16 @@ public class PlayerStorage {
     public void pushBundle(PlayerDataBundle bundle) {
         if (kvBucket == null) return;
         try {
-            byte[] binary = CBOR_MAPPER.writeValueAsBytes(bundle);
-            kvBucket.put(bundle.uuid().toString(), binary);
-            NATSPlayerDataBridge.LOGGER.info("Cluster: Pushed {} KB bundle for {}", binary.length / 1024, bundle.uuid());
+            byte[] cborBinary = CBOR_MAPPER.writeValueAsBytes(bundle);
+            
+            java.io.ByteArrayOutputStream baos = new java.io.ByteArrayOutputStream();
+            try (java.util.zip.GZIPOutputStream gzipOut = new java.util.zip.GZIPOutputStream(baos)) {
+                gzipOut.write(cborBinary);
+            }
+            byte[] compressedBinary = baos.toByteArray();
+            
+            kvBucket.put(bundle.uuid().toString(), compressedBinary);
+            NATSPlayerDataBridge.LOGGER.info("Cluster: Pushed {} bytes (compressed from {} bytes) bundle for {}", compressedBinary.length, cborBinary.length, bundle.uuid());
         } catch (Exception e) {
             NATSPlayerDataBridge.LOGGER.error("Failed to push CBOR bundle: {}", e.getMessage());
         }
@@ -65,8 +72,11 @@ public class PlayerStorage {
             KeyValueEntry entry = kvBucket.get(uuid.toString());
             if (entry == null || entry.getValue() == null) return Optional.empty();
 
-            PlayerDataBundle bundle = CBOR_MAPPER.readValue(entry.getValue(), PlayerDataBundle.class);
-            return Optional.of(bundle);
+            java.io.ByteArrayInputStream bais = new java.io.ByteArrayInputStream(entry.getValue());
+            try (java.util.zip.GZIPInputStream gzipIn = new java.util.zip.GZIPInputStream(bais)) {
+                PlayerDataBundle bundle = CBOR_MAPPER.readValue(gzipIn, PlayerDataBundle.class);
+                return Optional.of(bundle);
+            }
         } catch (Exception e) {
             NATSPlayerDataBridge.LOGGER.error("Failed to fetch/decode CBOR bundle: {}", e.getMessage());
             return Optional.empty();
