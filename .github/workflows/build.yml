@@ -19,6 +19,16 @@ jobs:
         with:
           java-version: '25'
           distribution: 'microsoft'
+      - name: checkout NATS-Fabric dependency
+        uses: actions/checkout@v4
+        with:
+          repository: 'xSaVageAU/NATS-Fabric'
+          path: 'nats-fabric'
+      - name: build and publish NATS-Fabric to mavenLocal
+        run: |
+          cd nats-fabric
+          chmod +x ./gradlew
+          ./gradlew publishToMavenLocal
       - name: make gradle wrapper executable
         run: chmod +x ./gradlew
       - name: build
