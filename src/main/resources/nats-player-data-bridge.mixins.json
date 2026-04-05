@@ -3,7 +3,7 @@
 	"package": "savage.natsplayerdata.mixin",
 	"compatibilityLevel": "JAVA_25",
 	"mixins": [
-		"ExampleMixin"
+		"PlayerSyncMixin"
 	],
 	"injectors": {
 		"defaultRequire": 1
