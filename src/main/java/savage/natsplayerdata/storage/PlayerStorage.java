@@ -50,14 +50,17 @@ public class PlayerStorage {
         try {
             byte[] cborBinary = CBOR_MAPPER.writeValueAsBytes(bundle);
             
+            long startNanos = System.nanoTime();
             java.io.ByteArrayOutputStream baos = new java.io.ByteArrayOutputStream();
             try (java.util.zip.GZIPOutputStream gzipOut = new java.util.zip.GZIPOutputStream(baos)) {
                 gzipOut.write(cborBinary);
             }
             byte[] compressedBinary = baos.toByteArray();
+            long compressNanos = System.nanoTime() - startNanos;
+            double compressMs = compressNanos / 1_000_000.0;
             
             kvBucket.put(bundle.uuid().toString(), compressedBinary);
-            NATSPlayerDataBridge.LOGGER.info("Cluster: Pushed {} bytes (compressed from {} bytes) bundle for {}", compressedBinary.length, cborBinary.length, bundle.uuid());
+            NATSPlayerDataBridge.LOGGER.info("Cluster: Pushed {} bytes (compressed from {} bytes in {}ms) bundle for {}", compressedBinary.length, cborBinary.length, String.format("%.2f", compressMs), bundle.uuid());
         } catch (Exception e) {
             NATSPlayerDataBridge.LOGGER.error("Failed to push CBOR bundle: {}", e.getMessage());
         }
@@ -72,11 +75,22 @@ public class PlayerStorage {
             KeyValueEntry entry = kvBucket.get(uuid.toString());
             if (entry == null || entry.getValue() == null) return Optional.empty();
 
-            java.io.ByteArrayInputStream bais = new java.io.ByteArrayInputStream(entry.getValue());
+            byte[] compressedBinary = entry.getValue();
+            long startNanos = System.nanoTime();
+            java.io.ByteArrayInputStream bais = new java.io.ByteArrayInputStream(compressedBinary);
+            java.io.ByteArrayOutputStream decompressedBaos = new java.io.ByteArrayOutputStream();
+            
             try (java.util.zip.GZIPInputStream gzipIn = new java.util.zip.GZIPInputStream(bais)) {
-                PlayerDataBundle bundle = CBOR_MAPPER.readValue(gzipIn, PlayerDataBundle.class);
-                return Optional.of(bundle);
+                gzipIn.transferTo(decompressedBaos);
             }
+            byte[] decompressedBinary = decompressedBaos.toByteArray();
+            long decompressNanos = System.nanoTime() - startNanos;
+            double decompressMs = decompressNanos / 1_000_000.0;
+            
+            NATSPlayerDataBridge.LOGGER.info("Cluster: Fetched {} bytes (decompressed to {} bytes in {}ms) bundle for {}", compressedBinary.length, decompressedBinary.length, String.format("%.2f", decompressMs), uuid);
+            
+            PlayerDataBundle bundle = CBOR_MAPPER.readValue(decompressedBinary, PlayerDataBundle.class);
+            return Optional.of(bundle);
         } catch (Exception e) {
             NATSPlayerDataBridge.LOGGER.error("Failed to fetch/decode CBOR bundle: {}", e.getMessage());
             return Optional.empty();
