@@ -17,10 +17,12 @@ import java.util.UUID;
 public class PlayerStorage {
 
     private static final String BUCKET_NAME = "player-sync-v1";
+    private static final String PRESENCE_BUCKET = "player-presence-v1";
     private static final ObjectMapper CBOR_MAPPER = new ObjectMapper(new CBORFactory());
     private static PlayerStorage instance;
 
     private KeyValue kvBucket;
+    private KeyValue presenceBucket;
 
     private PlayerStorage() {
         init();
@@ -37,9 +39,61 @@ public class PlayerStorage {
             if (kvBucket == null) {
                 NATSPlayerDataBridge.LOGGER.error("Synchronizer: Bucket '{}' not available!", BUCKET_NAME);
             }
+            
+            presenceBucket = NatsManager.getInstance().getKeyValue(PRESENCE_BUCKET);
+            if (presenceBucket == null) {
+                NATSPlayerDataBridge.LOGGER.warn("Synchronizer: Presence bucket '{}' not available! Creating or waiting...", PRESENCE_BUCKET);
+                // In production, we assume the bucket is pre-provisioned or handled by NatsManager
+            }
         } catch (Exception e) {
             NATSPlayerDataBridge.LOGGER.error("Failed to initialize NATS KV storage: {}", e.getMessage());
         }
+    }
+
+    /**
+     * Updates a player's presence in the cluster.
+     */
+    public void updatePresence(UUID uuid, String name, String serverId) {
+        if (presenceBucket == null) return;
+        try {
+            String value = name + "|" + serverId;
+            presenceBucket.put(uuid.toString(), value.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+        } catch (Exception e) {
+            NATSPlayerDataBridge.LOGGER.error("Failed to update presence for {}: {}", uuid, e.getMessage());
+        }
+    }
+
+    /**
+     * Clears a player's presence from the cluster.
+     */
+    public void clearPresence(UUID uuid) {
+        if (presenceBucket == null) return;
+        try {
+            presenceBucket.delete(uuid.toString());
+        } catch (Exception e) {
+            NATSPlayerDataBridge.LOGGER.error("Failed to clear presence for {}: {}", uuid, e.getMessage());
+        }
+    }
+
+    /**
+     * Fetches all active presences from the cluster.
+     */
+    public java.util.Map<String, String> getOnlinePresences() {
+        java.util.Map<String, String> presences = new java.util.HashMap<>();
+        if (presenceBucket == null) return presences;
+        
+        try {
+            java.util.List<String> keys = presenceBucket.keys();
+            for (String key : keys) {
+                KeyValueEntry entry = presenceBucket.get(key);
+                if (entry != null && entry.getValue() != null) {
+                    presences.put(key, new String(entry.getValue(), java.nio.charset.StandardCharsets.UTF_8));
+                }
+            }
+        } catch (Exception e) {
+            NATSPlayerDataBridge.LOGGER.error("Failed to fetch online presences: {}", e.getMessage());
+        }
+        return presences;
     }
 
     /**
