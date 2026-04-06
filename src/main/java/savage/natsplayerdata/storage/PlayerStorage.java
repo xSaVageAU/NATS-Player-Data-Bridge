@@ -51,6 +51,20 @@ public class PlayerStorage {
     }
 
     /**
+     * Checks if a player is NOT currently recorded as online in the cluster.
+     */
+    public boolean isOffline(UUID uuid) {
+        if (presenceBucket == null) return true;
+        try {
+            KeyValueEntry entry = presenceBucket.get(uuid.toString());
+            return entry == null || entry.getValue() == null;
+        } catch (Exception e) {
+            NATSPlayerDataBridge.LOGGER.error("Failed to check presence for {}: {}", uuid, e.getMessage());
+            return true; // Default to offline on error
+        }
+    }
+
+    /**
      * Updates a player's presence in the cluster.
      */
     public void updatePresence(UUID uuid, String name, String serverId) {
@@ -94,6 +108,23 @@ public class PlayerStorage {
             NATSPlayerDataBridge.LOGGER.error("Failed to fetch online presences: {}", e.getMessage());
         }
         return presences;
+    }
+
+    /**
+     * Purges all presence records from the cluster.
+     * To be called by the reset initiator.
+     */
+    public void purgeAllPresence() {
+        if (presenceBucket == null) return;
+        try {
+            java.util.List<String> keys = presenceBucket.keys();
+            for (String key : keys) {
+                presenceBucket.delete(key);
+            }
+            NATSPlayerDataBridge.LOGGER.info("Cluster: Presence bucket purged.");
+        } catch (Exception e) {
+            NATSPlayerDataBridge.LOGGER.error("Failed to purge presence bucket: {}", e.getMessage());
+        }
     }
 
     /**

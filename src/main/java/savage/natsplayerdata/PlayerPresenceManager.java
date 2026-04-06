@@ -33,8 +33,26 @@ public class PlayerPresenceManager {
     }
 
     /**
+     * Checks if the player is already recorded as online in the NATS cluster.
+     */
+    public static boolean isAlreadyOnline(UUID uuid) {
+        return !PlayerStorage.getInstance().isOffline(uuid);
+    }
+
+    /**
+     * Re-registers all currently online players on this server to the NATS cluster.
+     * Used after a cluster-wide presence reset.
+     */
+    public static void reSyncLocalPlayers(net.minecraft.server.MinecraftServer server) {
+        NATSPlayerDataBridge.LOGGER.info("Presence: Re-syncing local players to cluster...");
+        for (ServerPlayer player : server.getPlayerList().getPlayers()) {
+            join(player);
+        }
+    }
+
+    /**
      * Fetches the current online player list from the cluster.
-     * @return A map of Patient->ServerID entries.
+     * @return A map of UUID->Name|ServerID entries.
      */
     public static Map<String, String> getClusterOnline() {
         return PlayerStorage.getInstance().getOnlinePresences();

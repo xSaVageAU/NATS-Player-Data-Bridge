@@ -7,6 +7,7 @@ import net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents;
 import net.minecraft.commands.Commands;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.MinecraftServer;
+import savage.natsplayerdata.storage.PlayerStorage;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -79,7 +80,34 @@ public class NATSPlayerDataBridge implements ModInitializer {
 							ctx.getSource().sendSuccess(() -> Component.literal("§7- §f" + name + " §8(" + uuid + ") §7on §b" + serverId), false);
 						});
 						return 1;
-					})));
+					})
+					.then(Commands.literal("reset")
+						.executes(ctx -> {
+							// 1. Purge the NATS bucket (The initiator does this)
+							PlayerStorage.getInstance().purgeAllPresence();
+							
+							// 2. Notify all servers to re-sync
+							var conn = savage.natsfabric.NatsManager.getInstance().getConnection();
+							if (conn != null) {
+								conn.publish("player-presence.reset", new byte[0]);
+								ctx.getSource().sendSuccess(() -> Component.literal("§aPresence reset triggered! Purged bucket and notified cluster."), true);
+							} else {
+								ctx.getSource().sendFailure(Component.literal("§cNATS connection unavailable."));
+							}
+							return 1;
+						}))));
+		});
+
+		// Subscribe to Presence Reset
+		ServerLifecycleEvents.SERVER_STARTED.register(server -> {
+			var conn = savage.natsfabric.NatsManager.getInstance().getConnection();
+			if (conn != null) {
+				conn.createDispatcher(msg -> {
+					LOGGER.info("Cluster: Received presence reset request.");
+					PlayerPresenceManager.reSyncLocalPlayers(server);
+				}).subscribe("player-presence.reset");
+				LOGGER.info("NATS Bridge: Subscribed to presence reset topic.");
+			}
 		});
 
 		LOGGER.info("NATS Player Data Bridge: Binary CBOR engine ready.");
