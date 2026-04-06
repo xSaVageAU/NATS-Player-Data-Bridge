@@ -51,16 +51,28 @@ public class PlayerStorage {
     }
 
     /**
+     * Checks if the presence system is reachable.
+     */
+    public boolean isPresenceAvailable() {
+        try {
+            return presenceBucket != null && NatsManager.getInstance().isConnected();
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    /**
      * Checks if a player is NOT currently recorded as online in the cluster.
+     * Returns false if the status is unknown (e.g. NATS is down).
      */
     public boolean isOffline(UUID uuid) {
-        if (presenceBucket == null) return true;
+        if (presenceBucket == null) return false;
         try {
             KeyValueEntry entry = presenceBucket.get(uuid.toString());
             return entry == null || entry.getValue() == null;
         } catch (Exception e) {
             NATSPlayerDataBridge.LOGGER.error("Failed to check presence for {}: {}", uuid, e.getMessage());
-            return true; // Default to offline on error
+            return false; // Safe default: if we can't verify offline, assume online/busy
         }
     }
 

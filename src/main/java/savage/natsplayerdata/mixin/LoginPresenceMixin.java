@@ -23,6 +23,15 @@ public abstract class LoginPresenceMixin {
     private void onCanPlayerLogin(SocketAddress socketAddress, NameAndId nameAndId, CallbackInfoReturnable<Component> cir) {
         if (nameAndId != null) {
             UUID uuid = nameAndId.id();
+            
+            // 1. Verify NATS Availability
+            if (!savage.natsplayerdata.storage.PlayerStorage.getInstance().isPresenceAvailable()) {
+                savage.natsplayerdata.NATSPlayerDataBridge.LOGGER.error("Cluster: Rejecting login for {} - NATS cluster is unreachable!", nameAndId.name());
+                cir.setReturnValue(Component.literal("§cAuthentication failed: Cluster connection unreachable. Please try again later."));
+                return;
+            }
+
+            // 2. Check for duplicate session
             boolean online = PlayerPresenceManager.isAlreadyOnline(uuid);
             
             savage.natsplayerdata.NATSPlayerDataBridge.LOGGER.info("Cluster: Checking presence for {} ({}). Already online: {}", 

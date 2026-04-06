@@ -30,6 +30,7 @@ bin/
 
 # fabric
 
+thoughts.txt
 run/
 nats-fabric-source/
 
