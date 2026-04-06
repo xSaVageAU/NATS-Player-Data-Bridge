@@ -29,6 +29,14 @@ public class PlayerDataManager {
     public static void prepareAndPush(ServerPlayer player, MinecraftServer server) {
         UUID uuid = player.getUUID();
         
+        // SESSION LOCK: Only push if we own the lock or no one does
+        String owner = PlayerStorage.getInstance().getLockOwner(uuid);
+        String localServerId = savage.natsfabric.NatsManager.getInstance().getServerName();
+        if (owner != null && !owner.equals(localServerId)) {
+            NATSPlayerDataBridge.LOGGER.warn("Sync: Refusing to PUSH data for {} - session locked by server '{}'", player.getName().getString(), owner);
+            return;
+        }
+
         try {
             // Force save stats and advancements to disk before reading
             server.getPlayerList().getPlayerStats(player).save();
@@ -61,6 +69,15 @@ public class PlayerDataManager {
      * Fetches cluster data and writes it to local disk before Minecraft loads it.
      */
     public static java.util.Optional<CompoundTag> fetchAndApply(UUID uuid, MinecraftServer server) {
+        // SESSION LOCK: Only pull if we are the ones joining (no lock owner yet)
+        // If someone else owns the lock, pulling is dangerous as data is 'live' elsewhere.
+        String owner = PlayerStorage.getInstance().getLockOwner(uuid);
+        String localServerId = savage.natsfabric.NatsManager.getInstance().getServerName();
+        if (owner != null && !owner.equals(localServerId)) {
+            NATSPlayerDataBridge.LOGGER.error("Sync: Refusing to PULL data for {} - session locked by server '{}'", uuid, owner);
+            return java.util.Optional.empty();
+        }
+
         var bundleOpt = PlayerStorage.getInstance().fetchBundle(uuid);
         if (bundleOpt.isEmpty()) return java.util.Optional.empty();
 

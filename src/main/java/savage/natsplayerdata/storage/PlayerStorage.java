@@ -65,6 +65,23 @@ public class PlayerStorage {
     }
 
     /**
+     * Returns the server ID of the server currently holding the lock for this player.
+     * @return Server ID or null if not locked.
+     */
+    public String getLockOwner(UUID uuid) {
+        if (presenceBucket == null) return null;
+        try {
+            KeyValueEntry entry = presenceBucket.get(uuid.toString());
+            if (entry == null || entry.getValue() == null) return null;
+            String value = new String(entry.getValue(), java.nio.charset.StandardCharsets.UTF_8);
+            String[] parts = value.split("\\|", 2);
+            return parts.length > 1 ? parts[1] : null;
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    /**
      * Updates a player's presence in the cluster.
      */
     public void updatePresence(UUID uuid, String name, String serverId) {
