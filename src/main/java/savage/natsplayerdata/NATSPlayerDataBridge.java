@@ -57,6 +57,17 @@ public class NATSPlayerDataBridge implements ModInitializer {
 			PlayerDataManager.prepareAndPush(handler.getPlayer(), server);
 		});
 
+		// Periodic Cluster Checkpoints (Auto-save hook)
+		ServerLifecycleEvents.AFTER_SAVE.register((server, flush, force) -> {
+			var players = server.getPlayerList().getPlayers();
+			if (!players.isEmpty()) {
+				LOGGER.info("Cluster: Auto-save detected, pushing checkpoints for {} players...", players.size());
+				for (var player : players) {
+					PlayerDataManager.prepareAndPush(player, server);
+				}
+			}
+		});
+
 		// Manual Sync & Online Command
 		CommandRegistrationCallback.EVENT.register((dispatcher, registryAccess, environment) -> {
 			dispatcher.register(Commands.literal("nats")
