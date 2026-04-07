@@ -182,16 +182,13 @@ public class PlayerStorage {
             byte[] cborBinary = CBOR_MAPPER.writeValueAsBytes(bundle);
             
             long startNanos = System.nanoTime();
-            java.io.ByteArrayOutputStream baos = new java.io.ByteArrayOutputStream();
-            try (java.util.zip.GZIPOutputStream gzipOut = new java.util.zip.GZIPOutputStream(baos)) {
-                gzipOut.write(cborBinary);
-            }
-            byte[] compressedBinary = baos.toByteArray();
+            // Modern Zstd compression (Level 3 is default balance of speed/ratio)
+            byte[] compressedBinary = com.github.luben.zstd.Zstd.compress(cborBinary);
             long compressNanos = System.nanoTime() - startNanos;
             double compressMs = compressNanos / 1_000_000.0;
             
             kvBucket.put(bundle.uuid().toString(), compressedBinary);
-            NATSPlayerDataBridge.LOGGER.info("Cluster: Pushed {} bytes (compressed from {} bytes in {}ms) bundle for {}", compressedBinary.length, cborBinary.length, String.format("%.2f", compressMs), bundle.uuid());
+            NATSPlayerDataBridge.LOGGER.info("Cluster: Pushed {} bytes (Zstd compressed from {} bytes in {}ms) bundle for {}", compressedBinary.length, cborBinary.length, String.format("%.2f", compressMs), bundle.uuid());
         } catch (Exception e) {
             NATSPlayerDataBridge.LOGGER.error("Failed to push CBOR bundle: {}", e.getMessage());
         }
@@ -208,17 +205,15 @@ public class PlayerStorage {
 
             byte[] compressedBinary = entry.getValue();
             long startNanos = System.nanoTime();
-            java.io.ByteArrayInputStream bais = new java.io.ByteArrayInputStream(compressedBinary);
-            java.io.ByteArrayOutputStream decompressedBaos = new java.io.ByteArrayOutputStream();
             
-            try (java.util.zip.GZIPInputStream gzipIn = new java.util.zip.GZIPInputStream(bais)) {
-                gzipIn.transferTo(decompressedBaos);
-            }
-            byte[] decompressedBinary = decompressedBaos.toByteArray();
+            // Modern Zstd decompression
+            long decompressedSize = com.github.luben.zstd.Zstd.decompressedSize(compressedBinary);
+            byte[] decompressedBinary = com.github.luben.zstd.Zstd.decompress(compressedBinary, (int) decompressedSize);
+            
             long decompressNanos = System.nanoTime() - startNanos;
             double decompressMs = decompressNanos / 1_000_000.0;
             
-            NATSPlayerDataBridge.LOGGER.info("Cluster: Fetched {} bytes (decompressed to {} bytes in {}ms) bundle for {}", compressedBinary.length, decompressedBinary.length, String.format("%.2f", decompressMs), uuid);
+            NATSPlayerDataBridge.LOGGER.info("Cluster: Fetched {} bytes (Zstd decompressed to {} bytes in {}ms) bundle for {}", compressedBinary.length, decompressedBinary.length, String.format("%.2f", decompressMs), uuid);
             
             PlayerDataBundle bundle = CBOR_MAPPER.readValue(decompressedBinary, PlayerDataBundle.class);
             return Optional.of(bundle);

@@ -47,13 +47,17 @@ public class PlayerDataManager {
             player.saveWithoutId(output);
             CompoundTag nbt = output.buildResult();
             
+            // Write RAW NBT to bundle (Zstd will compress this much better than Gzip inside Gzip)
             ByteArrayOutputStream bos = new ByteArrayOutputStream();
-            NbtIo.writeCompressed(nbt, bos);
+            NbtIo.write(nbt, new java.io.DataOutputStream(bos));
             byte[] nbtBytes = bos.toByteArray();
 
             // 2. Read Stats/Advancements from Disk (These are less volatile)
             String statsJson = readText(server.getWorldPath(LevelResource.PLAYER_STATS_DIR).resolve(uuid + ".json"));
             String advJson = readText(server.getWorldPath(LevelResource.PLAYER_ADVANCEMENTS_DIR).resolve(uuid + ".json"));
+
+            NATSPlayerDataBridge.LOGGER.info("Sync: Packing bundle for {} [NBT: {}b, Stats: {}b, Adv: {}b]", 
+                player.getName().getString(), nbtBytes.length, statsJson.length(), advJson.length());
 
             PlayerDataBundle bundle = new PlayerDataBundle(
                 uuid, nbtBytes, statsJson, advJson, System.currentTimeMillis()
@@ -83,14 +87,23 @@ public class PlayerDataManager {
 
         PlayerDataBundle bundle = bundleOpt.get();
         try {
-            writeBinary(server.getWorldPath(LevelResource.PLAYER_DATA_DIR).resolve(uuid + ".dat"), bundle.nbt());
+            NATSPlayerDataBridge.LOGGER.info("Sync: Unpacking bundle for {} [NBT: {}b, Stats: {}b, Adv: {}b]", 
+                uuid, bundle.nbt().length, bundle.stats().length(), bundle.advancements().length());
+
+            // Read RAW NBT from bundle
+            java.io.ByteArrayInputStream bis = new java.io.ByteArrayInputStream(bundle.nbt());
+            CompoundTag tag = NbtIo.read(new java.io.DataInputStream(bis), net.minecraft.nbt.NbtAccounter.unlimitedHeap());
+            
+            // To be a "good citizen", we write GZIPPED NBT to disk (Vanilla compatibility)
+            ByteArrayOutputStream bos = new ByteArrayOutputStream();
+            NbtIo.writeCompressed(tag, bos);
+            writeBinary(server.getWorldPath(LevelResource.PLAYER_DATA_DIR).resolve(uuid + ".dat"), bos.toByteArray());
+
             writeText(server.getWorldPath(LevelResource.PLAYER_STATS_DIR).resolve(uuid + ".json"), bundle.stats());
             writeText(server.getWorldPath(LevelResource.PLAYER_ADVANCEMENTS_DIR).resolve(uuid + ".json"), bundle.advancements());
             
             NATSPlayerDataBridge.LOGGER.info("Cluster: Applied NATS bundle for {}", uuid);
             
-            java.io.ByteArrayInputStream bis = new java.io.ByteArrayInputStream(bundle.nbt());
-            CompoundTag tag = NbtIo.readCompressed(bis, net.minecraft.nbt.NbtAccounter.unlimitedHeap());
             int version = net.minecraft.nbt.NbtUtils.getDataVersion(tag);
             tag = net.minecraft.util.datafix.DataFixTypes.PLAYER.updateToCurrentVersion(server.getFixerUpper(), tag, version);
             return java.util.Optional.of(tag);
@@ -104,7 +117,17 @@ public class PlayerDataManager {
 
     private static String readText(Path path) throws IOException {
         File file = path.toFile();
-        return file.exists() ? FileUtils.readFileToString(file, StandardCharsets.UTF_8) : "{}";
+        if (!file.exists()) return "{}";
+        
+        String content = FileUtils.readFileToString(file, StandardCharsets.UTF_8);
+        
+        // If content is empty or just {}, try one more time after a tiny delay (race condition protection)
+        if (content.length() <= 2) {
+            try { Thread.sleep(50); } catch (InterruptedException ignored) {}
+            content = FileUtils.readFileToString(file, StandardCharsets.UTF_8);
+        }
+        
+        return content;
     }
 
     private static void writeBinary(Path path, byte[] data) throws IOException {
