@@ -29,11 +29,13 @@ public class NATSPlayerDataBridge implements ModInitializer {
 	public void onInitialize() {
 		LOGGER.info("NATS Player Data Bridge: Initializing real-time synchronization cache...");
 
-		// Capture Server Instance
 		ServerLifecycleEvents.SERVER_STARTED.register(server -> {
 			SERVER = server;
 			LOGGER.info("NATS Bridge: Global server instance captured.");
 			
+			// Initialize storage and start watcher
+			PlayerStorage.getInstance();
+
 			// Start Presence Heartbeat (Refresh every 30s for 60s TTL)
 			startPresenceHeartbeat(server);
 		});

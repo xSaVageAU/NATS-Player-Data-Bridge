@@ -30,7 +30,7 @@ public class PlayerDataManager {
         UUID uuid = player.getUUID();
         
         // SESSION LOCK: Only push if we own the lock or no one does
-        String owner = PlayerStorage.getInstance().getLockOwner(uuid);
+        String owner = PlayerPresenceManager.getLastKnownServer(uuid);
         String localServerId = savage.natsfabric.NatsManager.getInstance().getServerName();
         if (owner != null && !owner.equals(localServerId)) {
             NATSPlayerDataBridge.LOGGER.warn("Sync: Refusing to PUSH data for {} - session locked by server '{}'", player.getName().getString(), owner);
@@ -71,7 +71,7 @@ public class PlayerDataManager {
     public static java.util.Optional<CompoundTag> fetchAndApply(UUID uuid, MinecraftServer server) {
         // SESSION LOCK: Only pull if we are the ones joining (no lock owner yet)
         // If someone else owns the lock, pulling is dangerous as data is 'live' elsewhere.
-        String owner = PlayerStorage.getInstance().getLockOwner(uuid);
+        String owner = PlayerPresenceManager.getLastKnownServer(uuid);
         String localServerId = savage.natsfabric.NatsManager.getInstance().getServerName();
         if (owner != null && !owner.equals(localServerId)) {
             NATSPlayerDataBridge.LOGGER.error("Sync: Refusing to PULL data for {} - session locked by server '{}'", uuid, owner);

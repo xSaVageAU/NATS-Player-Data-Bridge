@@ -55,9 +55,45 @@ public class PlayerStorage {
 
             if (presenceBucket == null) {
                 NATSPlayerDataBridge.LOGGER.warn("Synchronizer: Presence bucket '{}' not available!", PRESENCE_BUCKET);
+            } else {
+                startPresenceWatcher();
             }
         } catch (Exception e) {
             NATSPlayerDataBridge.LOGGER.error("Failed to initialize NATS KV storage: {}", e.getMessage());
+        }
+    }
+
+    /**
+     * Starts a watcher on the presence bucket to maintain a local in-memory cache.
+     */
+    private void startPresenceWatcher() {
+        try {
+            if (presenceBucket != null) {
+                presenceBucket.watchAll(new io.nats.client.api.KeyValueWatcher() {
+                    @Override
+                    public void watch(io.nats.client.api.KeyValueEntry entry) {
+                        try {
+                            String key = entry.getKey();
+                            if (key.startsWith("_KV")) return; 
+                            UUID uuid = UUID.fromString(key);
+                            
+                            if (entry.getValue() == null || entry.getOperation() == io.nats.client.api.KeyValueOperation.DELETE || entry.getOperation() == io.nats.client.api.KeyValueOperation.PURGE) {
+                                savage.natsplayerdata.PlayerPresenceManager.updateLocalCache(uuid, null);
+                            } else {
+                                String rawValue = new String(entry.getValue(), java.nio.charset.StandardCharsets.UTF_8);
+                                savage.natsplayerdata.PlayerPresenceManager.updateLocalCache(uuid, rawValue);
+                            }
+                        } catch (Exception ignored) {}
+                    }
+
+                    @Override
+                    public void endOfData() {
+                        NATSPlayerDataBridge.LOGGER.info("Cluster: Presence cache initial sync complete.");
+                    }
+                });
+            }
+        } catch (Exception e) {
+            NATSPlayerDataBridge.LOGGER.error("Cluster: Failed to start presence watcher: {}", e.getMessage());
         }
     }
 
@@ -69,38 +105,6 @@ public class PlayerStorage {
             return presenceBucket != null && NatsManager.getInstance().isConnected();
         } catch (Exception e) {
             return false;
-        }
-    }
-
-    /**
-     * Checks if a player is NOT currently recorded as online in the cluster.
-     * Returns false if the status is unknown (e.g. NATS is down).
-     */
-    public boolean isOffline(UUID uuid) {
-        if (presenceBucket == null) return false;
-        try {
-            KeyValueEntry entry = presenceBucket.get(uuid.toString());
-            return entry == null || entry.getValue() == null;
-        } catch (Exception e) {
-            NATSPlayerDataBridge.LOGGER.error("Failed to check presence for {}: {}", uuid, e.getMessage());
-            return false; // Safe default: if we can't verify offline, assume online/busy
-        }
-    }
-
-    /**
-     * Returns the server ID of the server currently holding the lock for this player.
-     * @return Server ID or null if not locked.
-     */
-    public String getLockOwner(UUID uuid) {
-        if (presenceBucket == null) return null;
-        try {
-            KeyValueEntry entry = presenceBucket.get(uuid.toString());
-            if (entry == null || entry.getValue() == null) return null;
-            String value = new String(entry.getValue(), java.nio.charset.StandardCharsets.UTF_8);
-            String[] parts = value.split("\\|", 2);
-            return parts.length > 1 ? parts[1] : null;
-        } catch (Exception e) {
-            return null;
         }
     }
 
@@ -127,27 +131,6 @@ public class PlayerStorage {
         } catch (Exception e) {
             NATSPlayerDataBridge.LOGGER.error("Failed to clear presence for {}: {}", uuid, e.getMessage());
         }
-    }
-
-    /**
-     * Fetches all active presences from the cluster.
-     */
-    public java.util.Map<String, String> getOnlinePresences() {
-        java.util.Map<String, String> presences = new java.util.HashMap<>();
-        if (presenceBucket == null) return presences;
-        
-        try {
-            java.util.List<String> keys = presenceBucket.keys();
-            for (String key : keys) {
-                KeyValueEntry entry = presenceBucket.get(key);
-                if (entry != null && entry.getValue() != null) {
-                    presences.put(key, new String(entry.getValue(), java.nio.charset.StandardCharsets.UTF_8));
-                }
-            }
-        } catch (Exception e) {
-            NATSPlayerDataBridge.LOGGER.error("Failed to fetch online presences: {}", e.getMessage());
-        }
-        return presences;
     }
 
     /**

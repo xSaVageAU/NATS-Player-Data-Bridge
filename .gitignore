@@ -29,7 +29,7 @@ bin/
 *.DS_Store
 
 # fabric
-
+refs/
 thoughts.txt
 run/
 nats-fabric-source/
