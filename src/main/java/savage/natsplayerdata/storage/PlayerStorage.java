@@ -35,6 +35,12 @@ public class PlayerStorage {
 
     private void init() {
         try {
+            var conn = NatsManager.getInstance().getConnection();
+            if (conn == null) {
+                NATSPlayerDataBridge.LOGGER.error("Synchronizer: NATS connection not available for init!");
+                return;
+            }
+
             kvBucket = NatsManager.getInstance().getKeyValue(BUCKET_NAME);
             if (kvBucket == null) {
                 NATSPlayerDataBridge.LOGGER.error("Synchronizer: Bucket '{}' not available!", BUCKET_NAME);
@@ -42,15 +48,32 @@ public class PlayerStorage {
             
             // Presence bucket with 60s TTL
             try {
-                presenceBucket = NatsManager.getInstance().getConnection().keyValue("player-presence-v1");
+                io.nats.client.KeyValueManagement kvm = conn.keyValueManagement();
+                boolean create = false;
+                try {
+                    io.nats.client.api.KeyValueStatus status = kvm.getStatus(PRESENCE_BUCKET);
+                    // Check if it's currently persistent or has no TTL
+                    if (status.getConfiguration().getStorageType() != io.nats.client.api.StorageType.Memory || status.getConfiguration().getTtl().toSeconds() != 60) {
+                        NATSPlayerDataBridge.LOGGER.warn("Cluster: Presence bucket exists with wrong config (Storage: {}, TTL: {}s). Recreating...", 
+                            status.getConfiguration().getStorageType(), status.getConfiguration().getTtl().toSeconds());
+                        kvm.delete(PRESENCE_BUCKET);
+                        create = true;
+                    }
+                } catch (Exception e) {
+                    // Doesn't exist
+                    create = true;
+                }
+
+                if (create) {
+                    kvm.create(io.nats.client.api.KeyValueConfiguration.builder()
+                        .name(PRESENCE_BUCKET)
+                        .ttl(java.time.Duration.ofSeconds(60))
+                        .storageType(io.nats.client.api.StorageType.Memory)
+                        .build());
+                }
+                presenceBucket = conn.keyValue(PRESENCE_BUCKET);
             } catch (Exception e) {
-                io.nats.client.KeyValueManagement kvm = NatsManager.getInstance().getConnection().keyValueManagement();
-                kvm.create(io.nats.client.api.KeyValueConfiguration.builder()
-                    .name(PRESENCE_BUCKET)
-                    .ttl(java.time.Duration.ofSeconds(60))
-                    .storageType(io.nats.client.api.StorageType.Memory)
-                    .build());
-                presenceBucket = NatsManager.getInstance().getConnection().keyValue(PRESENCE_BUCKET);
+                NATSPlayerDataBridge.LOGGER.error("Cluster: Failed to setup ephemeral presence bucket: {}", e.getMessage());
             }
 
             if (presenceBucket == null) {

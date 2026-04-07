@@ -12,8 +12,15 @@ import java.util.UUID;
  */
 public class PlayerPresenceManager {
 
-    /** Local memory mirror of the NATS presence bucket. */
-    private static final Map<UUID, String> LOCAL_CACHE = new java.util.concurrent.ConcurrentHashMap<>();
+    /** Local memory mirror of the NATS presence bucket with entry timestamps. */
+    private static final Map<UUID, CacheEntry> LOCAL_CACHE = new java.util.concurrent.ConcurrentHashMap<>();
+    private static final long TTL_MS = 60_000; // 60 seconds
+
+    private record CacheEntry(String rawValue, long timestamp) {
+        boolean isExpired() {
+            return System.currentTimeMillis() - timestamp > TTL_MS;
+        }
+    }
 
     /**
      * Marks a player as online on this server in the NATS cluster.
@@ -39,16 +46,25 @@ public class PlayerPresenceManager {
      * Checks if the player is already recorded as online in the NATS cluster.
      */
     public static boolean isAlreadyOnline(UUID uuid) {
-        return LOCAL_CACHE.containsKey(uuid);
+        CacheEntry entry = LOCAL_CACHE.get(uuid);
+        if (entry == null) return false;
+        if (entry.isExpired()) {
+            LOCAL_CACHE.remove(uuid);
+            return false;
+        }
+        return true;
     }
 
     /**
      * Returns the server ID the player was last seen online on.
      */
     public static String getLastKnownServer(UUID uuid) {
-        String raw = LOCAL_CACHE.get(uuid);
-        if (raw == null) return null;
-        String[] parts = raw.split("\\|", 2);
+        CacheEntry entry = LOCAL_CACHE.get(uuid);
+        if (entry == null || entry.isExpired()) {
+            if (entry != null) LOCAL_CACHE.remove(uuid);
+            return null;
+        }
+        String[] parts = entry.rawValue().split("\\|", 2);
         return parts.length > 1 ? parts[1] : parts[0];
     }
 
@@ -60,7 +76,7 @@ public class PlayerPresenceManager {
             LOCAL_CACHE.remove(uuid);
             NATSPlayerDataBridge.LOGGER.info("Cache: Removed presence for {} (Cache Size: {})", uuid, LOCAL_CACHE.size());
         } else {
-            LOCAL_CACHE.put(uuid, rawValue);
+            LOCAL_CACHE.put(uuid, new CacheEntry(rawValue, System.currentTimeMillis()));
             NATSPlayerDataBridge.LOGGER.info("Cache: Updated presence for {} -> {} (Cache Size: {})", uuid, rawValue, LOCAL_CACHE.size());
         }
     }
@@ -80,7 +96,14 @@ public class PlayerPresenceManager {
      */
     public static Map<String, String> getClusterOnline() {
         Map<String, String> results = new java.util.HashMap<>();
-        LOCAL_CACHE.forEach((uuid, val) -> results.put(uuid.toString(), val));
+        long now = System.currentTimeMillis();
+        LOCAL_CACHE.forEach((uuid, entry) -> {
+            if (!entry.isExpired()) {
+                results.put(uuid.toString(), entry.rawValue());
+            }
+        });
+        // Cleanup expired entries from main cache
+        LOCAL_CACHE.entrySet().removeIf(e -> e.getValue().isExpired());
         return results;
     }
 }
