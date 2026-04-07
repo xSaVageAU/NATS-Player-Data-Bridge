@@ -33,6 +33,9 @@ public class NATSPlayerDataBridge implements ModInitializer {
 		ServerLifecycleEvents.SERVER_STARTED.register(server -> {
 			SERVER = server;
 			LOGGER.info("NATS Bridge: Global server instance captured.");
+			
+			// Start Presence Heartbeat (Refresh every 30s for 60s TTL)
+			startPresenceHeartbeat(server);
 		});
 
 		ServerLifecycleEvents.SERVER_STOPPING.register(server -> {
@@ -111,5 +114,30 @@ public class NATSPlayerDataBridge implements ModInitializer {
 		});
 
 		LOGGER.info("NATS Player Data Bridge: Binary CBOR engine ready.");
+	}
+
+	private void startPresenceHeartbeat(net.minecraft.server.MinecraftServer server) {
+		Thread heartbeat = new Thread(() -> {
+			while (SERVER != null) {
+				try {
+					Thread.sleep(30000); // 30 seconds
+					if (SERVER == null) break;
+					
+					var players = SERVER.getPlayerList().getPlayers();
+					if (!players.isEmpty()) {
+						LOGGER.info("Cluster: Refreshing presence for {} online players...", players.size());
+						for (var player : players) {
+							PlayerPresenceManager.join(player);
+						}
+					}
+				} catch (InterruptedException e) {
+					break;
+				} catch (Exception e) {
+					LOGGER.error("Cluster: Error in presence heartbeat", e);
+				}
+			}
+		}, "NATS-Presence-Heartbeat");
+		heartbeat.setDaemon(true);
+		heartbeat.start();
 	}
 }

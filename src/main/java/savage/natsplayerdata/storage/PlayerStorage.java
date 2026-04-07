@@ -40,10 +40,21 @@ public class PlayerStorage {
                 NATSPlayerDataBridge.LOGGER.error("Synchronizer: Bucket '{}' not available!", BUCKET_NAME);
             }
             
-            presenceBucket = NatsManager.getInstance().getKeyValue(PRESENCE_BUCKET);
+            // Presence bucket with 60s TTL
+            try {
+                presenceBucket = NatsManager.getInstance().getConnection().keyValue("player-presence-v1");
+            } catch (Exception e) {
+                io.nats.client.KeyValueManagement kvm = NatsManager.getInstance().getConnection().keyValueManagement();
+                kvm.create(io.nats.client.api.KeyValueConfiguration.builder()
+                    .name(PRESENCE_BUCKET)
+                    .ttl(java.time.Duration.ofSeconds(60))
+                    .storageType(io.nats.client.api.StorageType.Memory)
+                    .build());
+                presenceBucket = NatsManager.getInstance().getConnection().keyValue(PRESENCE_BUCKET);
+            }
+
             if (presenceBucket == null) {
-                NATSPlayerDataBridge.LOGGER.warn("Synchronizer: Presence bucket '{}' not available! Creating or waiting...", PRESENCE_BUCKET);
-                // In production, we assume the bucket is pre-provisioned or handled by NatsManager
+                NATSPlayerDataBridge.LOGGER.warn("Synchronizer: Presence bucket '{}' not available!", PRESENCE_BUCKET);
             }
         } catch (Exception e) {
             NATSPlayerDataBridge.LOGGER.error("Failed to initialize NATS KV storage: {}", e.getMessage());
