@@ -47,7 +47,13 @@ public class NATSPlayerDataBridge implements ModInitializer {
 		// Register Join Event (Set Presence)
 		ServerPlayConnectionEvents.JOIN.register((handler, sender, server) -> {
 			LOGGER.info("Event: Player joined {}, setting presence...", handler.getPlayer().getName().getString());
-			PlayerPresenceManager.join(handler.getPlayer());
+			boolean locked = PlayerPresenceManager.join(handler.getPlayer(), false); // Initial Lock
+			
+			// Failsafe: If they somehow got past the canPlayerLogin check, disconnect them now.
+			if (!locked) {
+				LOGGER.error("Event: CRITICAL LOCK FAILURE for {} - disconnecting.", handler.getPlayer().getName().getString());
+				handler.disconnect(Component.literal("§cCluster lock acquisition failed.\n§7You may already be online on another server."));
+			}
 		});
 
 		// Register Disconnect Event (Clear Presence & Save Bundle)
@@ -140,7 +146,7 @@ public class NATSPlayerDataBridge implements ModInitializer {
 					if (!players.isEmpty()) {
 						LOGGER.info("Cluster: Refreshing presence for {} online players...", players.size());
 						for (var player : players) {
-							PlayerPresenceManager.join(player);
+							PlayerPresenceManager.join(player, true);
 						}
 					}
 				} catch (InterruptedException e) {

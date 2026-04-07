@@ -33,6 +33,10 @@ public class PlayerStorage {
         return instance;
     }
 
+    public KeyValue getPresenceBucket() {
+        return presenceBucket;
+    }
+
     private void init() {
         try {
             var conn = NatsManager.getInstance().getConnection();

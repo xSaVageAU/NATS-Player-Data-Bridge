@@ -24,13 +24,65 @@ public class PlayerPresenceManager {
 
     /**
      * Marks a player as online on this server in the NATS cluster.
+     * @param player The player instance.
+     * @param refresh If true, uses put() to refresh TTL. If false, uses create() for initial lock.
+     * @return true if lock acquired or refreshed, false if already online elsewhere.
      */
-    public static void join(ServerPlayer player) {
+    public static boolean join(ServerPlayer player, boolean refresh) {
         UUID uuid = player.getUUID();
         String name = player.getName().getString();
         String serverId = NatsManager.getInstance().getServerName();
-        NATSPlayerDataBridge.LOGGER.info("Presence: Player {} ({}) joined on {}", name, uuid, serverId);
-        PlayerStorage.getInstance().updatePresence(uuid, name, serverId);
+        
+        if (refresh) {
+            // Heartbeat: Overwrite to keep TTL alive
+            updatePresence(uuid, name, serverId);
+            return true;
+        } else {
+            // Initial Join: Atomic create to act as a lock
+            boolean locked = tryLock(uuid, name, serverId);
+            if (locked) {
+                NATSPlayerDataBridge.LOGGER.info("Presence: Lock ACQUIRED for {} ({}) on {}", name, uuid, serverId);
+            } else {
+                NATSPlayerDataBridge.LOGGER.warn("Presence: Lock FAILED for {} ({}) - already online elsewhere!", name, uuid);
+            }
+            return locked;
+        }
+    }
+
+    /**
+     * Updates a player's presence in the cluster using standard put().
+     */
+    private static void updatePresence(UUID uuid, String name, String serverId) {
+        try {
+            var bucket = PlayerStorage.getInstance().getPresenceBucket();
+            if (bucket != null) {
+                String value = name + "|" + serverId;
+                bucket.put(uuid.toString(), value.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+            }
+        } catch (Exception e) {
+            NATSPlayerDataBridge.LOGGER.error("Failed to update presence for {}: {}", uuid, e.getMessage());
+        }
+    }
+
+    /**
+     * Attempts to atomically create the presence key in NATS.
+     */
+    private static boolean tryLock(UUID uuid, String name, String serverId) {
+        try {
+            var bucket = PlayerStorage.getInstance().getPresenceBucket();
+            if (bucket == null) return false;
+
+            String value = name + "|" + serverId;
+            // Atomic Create: Fails if key already exists
+            bucket.create(uuid.toString(), value.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+            return true;
+        } catch (io.nats.client.JetStreamApiException e) {
+            // NATS Error Code 10071 is "wrong last sequence", meaning it already exists
+            return false; 
+        } catch (Exception e) {
+            NATSPlayerDataBridge.LOGGER.error("Presence: Lock error for {}: {}", uuid, e.getMessage());
+            return false;
+        }
     }
 
     /**
@@ -87,7 +139,7 @@ public class PlayerPresenceManager {
     public static void reSyncLocalPlayers(net.minecraft.server.MinecraftServer server) {
         NATSPlayerDataBridge.LOGGER.info("Presence: Re-syncing local players to cluster...");
         for (ServerPlayer player : server.getPlayerList().getPlayers()) {
-            join(player);
+            join(player, false);
         }
     }
 
