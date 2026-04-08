@@ -14,7 +14,12 @@ import java.io.File;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
+import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.TimeUnit;
 
 /**
  * Handles the packing and unpacking of physical player files into CBOR bundles.
@@ -22,6 +27,25 @@ import java.util.UUID;
 public class PlayerDataManager {
 
     private static final LevelResource ROOT = LevelResource.ROOT;
+    private static final Map<UUID, CompletableFuture<Optional<PlayerDataBundle>>> PENDING_FETCHES = new ConcurrentHashMap<>();
+
+    /**
+     * Starts an asynchronous fetch for player data from the cluster.
+     * This should be called early in the login process (e.g., PreLogin).
+     */
+    public static void requestAsyncFetch(UUID uuid) {
+        if (PENDING_FETCHES.containsKey(uuid)) return;
+        
+        NATSPlayerDataBridge.LOGGER.info("Cluster: Starting async pre-fetch for {}", uuid);
+        CompletableFuture<Optional<PlayerDataBundle>> future = PlayerStorage.getInstance().fetchBundleAsync(uuid);
+        PENDING_FETCHES.put(uuid, future);
+        
+        // Cleanup after 30 seconds if never consumed
+        future.orTimeout(30, TimeUnit.SECONDS).whenComplete((res, ex) -> {
+            // We don't remove here because we want fetchAndApply to find it. 
+            // The removal happens in fetchAndApply.
+        });
+    }
 
     /**
      * Packs local world files into a NATS-ready CBOR bundle.
@@ -82,7 +106,24 @@ public class PlayerDataManager {
             return java.util.Optional.empty();
         }
 
-        var bundleOpt = PlayerStorage.getInstance().fetchBundle(uuid);
+        // Check for pending async fetch
+        CompletableFuture<Optional<PlayerDataBundle>> future = PENDING_FETCHES.remove(uuid);
+        Optional<PlayerDataBundle> bundleOpt;
+
+        if (future != null) {
+            try {
+                // Wait for the async fetch to complete (max 5s timeout to prevent hanging the main thread indefinitely)
+                bundleOpt = future.get(5, TimeUnit.SECONDS);
+                NATSPlayerDataBridge.LOGGER.info("Cluster: Consumed async pre-fetch for {}", uuid);
+            } catch (Exception e) {
+                NATSPlayerDataBridge.LOGGER.warn("Cluster: Async pre-fetch failed or timed out for {}: {}", uuid, e.getMessage());
+                bundleOpt = PlayerStorage.getInstance().fetchBundle(uuid); // Fallback to sync fetch
+            }
+        } else {
+            // Fallback to sync fetch if no async fetch was started
+            bundleOpt = PlayerStorage.getInstance().fetchBundle(uuid);
+        }
+
         if (bundleOpt.isEmpty()) return java.util.Optional.empty();
 
         PlayerDataBundle bundle = bundleOpt.get();

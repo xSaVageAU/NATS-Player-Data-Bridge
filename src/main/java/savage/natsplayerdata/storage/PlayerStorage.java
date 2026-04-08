@@ -226,4 +226,11 @@ public class PlayerStorage {
             return Optional.empty();
         }
     }
+
+    /**
+     * Fetches a player bundle asynchronously.
+     */
+    public java.util.concurrent.CompletableFuture<Optional<PlayerDataBundle>> fetchBundleAsync(UUID uuid) {
+        return java.util.concurrent.CompletableFuture.supplyAsync(() -> fetchBundle(uuid));
+    }
 }

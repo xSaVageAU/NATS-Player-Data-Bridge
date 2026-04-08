@@ -40,6 +40,10 @@ public abstract class LoginPresenceMixin {
             if (online) {
                 // Reject the login if already online on another server in the cluster
                 cir.setReturnValue(Component.literal("§cYou are already online on another server in this cluster!"));
+            } else {
+                // If not online elsewhere, start pre-fetching their data asynchronously immediately.
+                // This gives us a few hundred MS of "head start" while Minecraft finishes the login handshake.
+                savage.natsplayerdata.PlayerDataManager.requestAsyncFetch(uuid);
             }
         }
     }
