@@ -14,6 +14,7 @@ import java.io.File;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
+import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
@@ -28,6 +29,7 @@ public class PlayerDataManager {
 
     private static final LevelResource ROOT = LevelResource.ROOT;
     private static final Map<UUID, CompletableFuture<Optional<PlayerDataBundle>>> PENDING_FETCHES = new ConcurrentHashMap<>();
+    private static final com.fasterxml.jackson.databind.ObjectMapper JSON_MAPPER = new com.fasterxml.jackson.databind.ObjectMapper();
 
     /**
      * Starts an asynchronous fetch for player data from the cluster.
@@ -50,6 +52,7 @@ public class PlayerDataManager {
     /**
      * Packs local world files into a NATS-ready CBOR bundle.
      */
+    @SuppressWarnings("unchecked")
     public static void prepareAndPush(ServerPlayer player, MinecraftServer server) {
         UUID uuid = player.getUUID();
         
@@ -76,15 +79,18 @@ public class PlayerDataManager {
             NbtIo.write(nbt, new java.io.DataOutputStream(bos));
             byte[] nbtBytes = bos.toByteArray();
 
-            // 2. Read Stats/Advancements from Disk (These are less volatile)
+            // 2. Read Stats/Advancements from Disk (Temporary transition: Read JSON and convert to Maps)
             String statsJson = readText(server.getWorldPath(LevelResource.PLAYER_STATS_DIR).resolve(uuid + ".json"));
             String advJson = readText(server.getWorldPath(LevelResource.PLAYER_ADVANCEMENTS_DIR).resolve(uuid + ".json"));
 
-            NATSPlayerDataBridge.LOGGER.info("Sync: Packing bundle for {} [NBT: {}b, Stats: {}b, Adv: {}b]", 
-                player.getName().getString(), nbtBytes.length, statsJson.length(), advJson.length());
+            Map<String, Object> statsMap = JSON_MAPPER.readValue(statsJson, Map.class);
+            Map<String, Object> advMap = JSON_MAPPER.readValue(advJson, Map.class);
+
+            NATSPlayerDataBridge.LOGGER.info("Sync: Packing bundle for {} [NBT: {}b, Stats: {} top-level keys, Adv: {} keys]", 
+                player.getName().getString(), nbtBytes.length, statsMap.size(), advMap.size());
 
             PlayerDataBundle bundle = new PlayerDataBundle(
-                uuid, nbtBytes, statsJson, advJson, System.currentTimeMillis()
+                uuid, nbtBytes, statsMap, advMap, System.currentTimeMillis()
             );
 
             PlayerStorage.getInstance().pushBundle(bundle);
@@ -128,8 +134,8 @@ public class PlayerDataManager {
 
         PlayerDataBundle bundle = bundleOpt.get();
         try {
-            NATSPlayerDataBridge.LOGGER.info("Sync: Unpacking bundle for {} [NBT: {}b, Stats: {}b, Adv: {}b]", 
-                uuid, bundle.nbt().length, bundle.stats().length(), bundle.advancements().length());
+            NATSPlayerDataBridge.LOGGER.info("Sync: Unpacking bundle for {} [NBT: {}b, Stats: {} keys, Adv: {} keys]", 
+                uuid, bundle.nbt().length, bundle.stats().size(), bundle.advancements().size());
 
             // Read RAW NBT from bundle
             java.io.ByteArrayInputStream bis = new java.io.ByteArrayInputStream(bundle.nbt());
@@ -140,8 +146,9 @@ public class PlayerDataManager {
             NbtIo.writeCompressed(tag, bos);
             writeBinary(server.getWorldPath(LevelResource.PLAYER_DATA_DIR).resolve(uuid + ".dat"), bos.toByteArray());
 
-            writeText(server.getWorldPath(LevelResource.PLAYER_STATS_DIR).resolve(uuid + ".json"), bundle.stats());
-            writeText(server.getWorldPath(LevelResource.PLAYER_ADVANCEMENTS_DIR).resolve(uuid + ".json"), bundle.advancements());
+            // Temporary transition: Convert Maps back to JSON for disk writing
+            writeText(server.getWorldPath(LevelResource.PLAYER_STATS_DIR).resolve(uuid + ".json"), JSON_MAPPER.writeValueAsString(bundle.stats()));
+            writeText(server.getWorldPath(LevelResource.PLAYER_ADVANCEMENTS_DIR).resolve(uuid + ".json"), JSON_MAPPER.writeValueAsString(bundle.advancements()));
             
             NATSPlayerDataBridge.LOGGER.info("Cluster: Applied NATS bundle for {}", uuid);
             

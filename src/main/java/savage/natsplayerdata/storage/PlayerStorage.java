@@ -186,8 +186,8 @@ public class PlayerStorage {
             byte[] cborBinary = CBOR_MAPPER.writeValueAsBytes(bundle);
             
             long startNanos = System.nanoTime();
-            // Modern Zstd compression (Level 3 is default balance of speed/ratio)
-            byte[] compressedBinary = com.github.luben.zstd.Zstd.compress(cborBinary);
+            // Modern Zstd compression (Level 1 for maximum speed)
+            byte[] compressedBinary = com.github.luben.zstd.Zstd.compress(cborBinary, 1);
             long compressNanos = System.nanoTime() - startNanos;
             double compressMs = compressNanos / 1_000_000.0;
             
