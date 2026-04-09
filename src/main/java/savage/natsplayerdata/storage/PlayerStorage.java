@@ -45,7 +45,21 @@ public class PlayerStorage {
                 return;
             }
 
-            kvBucket = NatsManager.getInstance().getKeyValue(BUCKET_NAME);
+            // Sync bucket (persistent)
+            try {
+                kvBucket = conn.keyValue(BUCKET_NAME);
+            } catch (Exception e) {
+                try {
+                    io.nats.client.KeyValueManagement kvm = conn.keyValueManagement();
+                    kvm.create(io.nats.client.api.KeyValueConfiguration.builder()
+                        .name(BUCKET_NAME)
+                        .build());
+                    kvBucket = conn.keyValue(BUCKET_NAME);
+                } catch (Exception e2) {
+                    NATSPlayerDataBridge.LOGGER.error("Synchronizer: Failed to create sync bucket '{}': {}", BUCKET_NAME, e2.getMessage());
+                }
+            }
+
             if (kvBucket == null) {
                 NATSPlayerDataBridge.LOGGER.error("Synchronizer: Bucket '{}' not available!", BUCKET_NAME);
             }
