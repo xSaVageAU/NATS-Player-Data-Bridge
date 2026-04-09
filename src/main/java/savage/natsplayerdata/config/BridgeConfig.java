@@ -8,6 +8,8 @@ import savage.natsplayerdata.NATSPlayerDataBridge;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * Configuration for the NATS Player Data Bridge.
@@ -20,6 +22,25 @@ public class BridgeConfig {
 
     /** Whether to enable verbose debug logging. */
     public boolean debug = false;
+
+    /** 
+     * Mode for NBT filtering. 
+     * "blacklist" = sync everything except keys in filterKeys.
+     * "whitelist" = sync ONLY keys in filterKeys.
+     */
+    public String filterMode = "blacklist";
+
+    /** 
+     * Top-level NBT keys to be filtered.
+     */
+    public List<String> filterKeys = new ArrayList<>();
+
+    public BridgeConfig() {
+        // Default examples
+        filterKeys.add("Pos");
+        filterKeys.add("Rotation");
+        filterKeys.add("Dimension");
+    }
 
     /**
      * Loads the config from disk, or creates a default one if it doesn't exist.

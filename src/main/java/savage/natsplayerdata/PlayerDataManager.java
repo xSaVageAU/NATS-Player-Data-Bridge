@@ -6,6 +6,7 @@ import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.level.storage.LevelResource;
 import org.apache.commons.io.FileUtils;
+import savage.natsplayerdata.config.BridgeConfig;
 import savage.natsplayerdata.model.PlayerDataBundle;
 import savage.natsplayerdata.storage.PlayerStorage;
 
@@ -14,8 +15,10 @@ import java.io.File;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
+import java.util.HashSet;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
@@ -71,13 +74,16 @@ public class PlayerDataManager {
             net.minecraft.world.level.storage.TagValueOutput output = net.minecraft.world.level.storage.TagValueOutput.createWithContext(net.minecraft.util.ProblemReporter.DISCARDING, server.registryAccess());
             player.saveWithoutId(output);
             CompoundTag nbt = output.buildResult();
+
+            // 2. Filter NBT based on Config
+            filterNbt(nbt);
             
             // Write RAW NBT to bundle (Zstd will compress this much better than Gzip inside Gzip)
             ByteArrayOutputStream bos = new ByteArrayOutputStream();
             NbtIo.write(nbt, new java.io.DataOutputStream(bos));
             byte[] nbtBytes = bos.toByteArray();
 
-            // 2. Read Stats/Advancements from Disk (Temporary transition: Read JSON and convert to Maps)
+            // 3. Read Stats/Advancements from Disk (Temporary transition: Read JSON and convert to Maps)
             String statsJson = readText(server.getWorldPath(LevelResource.PLAYER_STATS_DIR).resolve(uuid + ".json"));
             String advJson = readText(server.getWorldPath(LevelResource.PLAYER_ADVANCEMENTS_DIR).resolve(uuid + ".json"));
 
@@ -98,11 +104,36 @@ public class PlayerDataManager {
     }
 
     /**
+     * Filters the CompoundTag based on the BridgeConfig.
+     */
+    private static void filterNbt(CompoundTag tag) {
+        BridgeConfig config = NATSPlayerDataBridge.getConfig();
+        if (config == null || config.filterKeys == null || config.filterKeys.isEmpty()) return;
+
+        boolean isWhitelist = "whitelist".equalsIgnoreCase(config.filterMode);
+
+        if (isWhitelist) {
+            // Whitelist Mode: sync ONLY keys in filterKeys
+            Set<String> whitelist = new HashSet<>(config.filterKeys);
+            Set<String> keys = new HashSet<>(tag.keySet());
+            for (String key : keys) {
+                if (!whitelist.contains(key)) {
+                    tag.remove(key);
+                }
+            }
+        } else {
+            // Blacklist Mode: sync everything except keys in filterKeys
+            for (String key : config.filterKeys) {
+                tag.remove(key);
+            }
+        }
+    }
+
+    /**
      * Fetches cluster data and writes it to local disk before Minecraft loads it.
      */
     public static java.util.Optional<CompoundTag> fetchAndApply(UUID uuid, MinecraftServer server) {
         // SESSION LOCK: Only pull if we are the ones joining (no lock owner yet)
-        // If someone else owns the lock, pulling is dangerous as data is 'live' elsewhere.
         String owner = PlayerPresenceManager.getLastKnownServer(uuid);
         String localServerId = savage.natsfabric.NatsManager.getInstance().getServerName();
         if (owner != null && !owner.equals(localServerId)) {
@@ -116,15 +147,13 @@ public class PlayerDataManager {
 
         if (future != null) {
             try {
-                // Wait for the async fetch to complete (max 5s timeout to prevent hanging the main thread indefinitely)
                 bundleOpt = future.get(5, TimeUnit.SECONDS);
                 NATSPlayerDataBridge.debugLog("Cluster: Consumed async pre-fetch for {}", uuid);
             } catch (Exception e) {
                 NATSPlayerDataBridge.LOGGER.warn("Cluster: Async pre-fetch failed or timed out for {}: {}", uuid, e.getMessage());
-                bundleOpt = PlayerStorage.getInstance().fetchBundle(uuid); // Fallback to sync fetch
+                bundleOpt = PlayerStorage.getInstance().fetchBundle(uuid);
             }
         } else {
-            // Fallback to sync fetch if no async fetch was started
             bundleOpt = PlayerStorage.getInstance().fetchBundle(uuid);
         }
 
@@ -135,27 +164,53 @@ public class PlayerDataManager {
             NATSPlayerDataBridge.debugLog("Sync: Unpacking bundle for {} [NBT: {}b, Stats: {} keys, Adv: {} keys]", 
                 uuid, bundle.nbt().length, bundle.stats().size(), bundle.advancements().size());
 
-            // Read RAW NBT from bundle
+            // 1. Read synced delta NBT from bundle
             java.io.ByteArrayInputStream bis = new java.io.ByteArrayInputStream(bundle.nbt());
-            CompoundTag tag = NbtIo.read(new java.io.DataInputStream(bis), net.minecraft.nbt.NbtAccounter.unlimitedHeap());
+            CompoundTag natsTag = NbtIo.read(new java.io.DataInputStream(bis), net.minecraft.nbt.NbtAccounter.unlimitedHeap());
             
-            // To be a "good citizen", we write GZIPPED NBT to disk (Vanilla compatibility)
+            // 2. Load the current local base data from disk
+            CompoundTag finalTag = readLocalNbt(uuid, server);
+            
+            // 3. Merge: Synced NATS keys overwrite local data
+            for (String key : natsTag.keySet()) {
+                finalTag.put(key, natsTag.get(key));
+            }
+
+            // 4. Update the combined result to current version
+            int version = net.minecraft.nbt.NbtUtils.getDataVersion(finalTag);
+            finalTag = net.minecraft.util.datafix.DataFixTypes.PLAYER.updateToCurrentVersion(server.getFixerUpper(), finalTag, version);
+
+            // 5. Write combined GZIPPED NBT back to disk (Vanilla compatibility)
             ByteArrayOutputStream bos = new ByteArrayOutputStream();
-            NbtIo.writeCompressed(tag, bos);
+            NbtIo.writeCompressed(finalTag, bos);
             writeBinary(server.getWorldPath(LevelResource.PLAYER_DATA_DIR).resolve(uuid + ".dat"), bos.toByteArray());
 
-            // Temporary transition: Convert Maps back to JSON for disk writing
+            // Note: Stats and advancements are still entirely replaced (common for multi-server setups)
             writeText(server.getWorldPath(LevelResource.PLAYER_STATS_DIR).resolve(uuid + ".json"), JSON_MAPPER.writeValueAsString(bundle.stats()));
             writeText(server.getWorldPath(LevelResource.PLAYER_ADVANCEMENTS_DIR).resolve(uuid + ".json"), JSON_MAPPER.writeValueAsString(bundle.advancements()));
             
-            NATSPlayerDataBridge.debugLog("Cluster: Applied NATS bundle for {}", uuid);
+            NATSPlayerDataBridge.debugLog("Cluster: Applied NATS bundle merge for {}", uuid);
             
-            int version = net.minecraft.nbt.NbtUtils.getDataVersion(tag);
-            tag = net.minecraft.util.datafix.DataFixTypes.PLAYER.updateToCurrentVersion(server.getFixerUpper(), tag, version);
-            return java.util.Optional.of(tag);
+            return java.util.Optional.of(finalTag);
         } catch (Exception e) {
             NATSPlayerDataBridge.LOGGER.error("Sync Error: Failed to unpack bundle for {}: {}", uuid, e.getMessage());
             return java.util.Optional.empty();
+        }
+    }
+
+    /**
+     * Reads the current local player NBT from disk if it exists.
+     */
+    private static CompoundTag readLocalNbt(UUID uuid, MinecraftServer server) {
+        Path path = server.getWorldPath(LevelResource.PLAYER_DATA_DIR).resolve(uuid + ".dat");
+        File file = path.toFile();
+        if (!file.exists()) return new CompoundTag();
+        
+        try (java.io.FileInputStream fis = new java.io.FileInputStream(file)) {
+            return NbtIo.readCompressed(fis, net.minecraft.nbt.NbtAccounter.unlimitedHeap());
+        } catch (Exception e) {
+            NATSPlayerDataBridge.debugLog("Sync: No valid local NBT found for {} (New player?), starting fresh.", uuid);
+            return new CompoundTag();
         }
     }
 

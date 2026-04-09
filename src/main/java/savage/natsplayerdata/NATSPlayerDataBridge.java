@@ -27,6 +27,10 @@ public class NATSPlayerDataBridge implements ModInitializer {
 		return SERVER;
 	}
 
+	public static BridgeConfig getConfig() {
+		return config;
+	}
+
 	public static void debugLog(String message, Object... args) {
 		if (config != null && config.debug) {
 			LOGGER.info("[DEBUG] " + message, args);
