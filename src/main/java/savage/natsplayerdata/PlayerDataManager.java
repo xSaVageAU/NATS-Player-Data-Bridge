@@ -15,6 +15,7 @@ import java.io.File;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Optional;
@@ -56,6 +57,7 @@ public class PlayerDataManager {
     @SuppressWarnings("unchecked")
     public static void prepareAndPush(ServerPlayer player, MinecraftServer server) {
         UUID uuid = player.getUUID();
+        BridgeConfig config = NATSPlayerDataBridge.getConfig();
         
         // SESSION LOCK: Only push if we own the lock or no one does
         String owner = PlayerPresenceManager.getLastKnownServer(uuid);
@@ -83,12 +85,19 @@ public class PlayerDataManager {
             NbtIo.write(nbt, new java.io.DataOutputStream(bos));
             byte[] nbtBytes = bos.toByteArray();
 
-            // 3. Read Stats/Advancements from Disk (Temporary transition: Read JSON and convert to Maps)
-            String statsJson = readText(server.getWorldPath(LevelResource.PLAYER_STATS_DIR).resolve(uuid + ".json"));
-            String advJson = readText(server.getWorldPath(LevelResource.PLAYER_ADVANCEMENTS_DIR).resolve(uuid + ".json"));
+            // 3. Read Stats/Advancements from Disk if enabled
+            Map<String, Object> statsMap = Collections.emptyMap();
+            Map<String, Object> advMap = Collections.emptyMap();
 
-            Map<String, Object> statsMap = JSON_MAPPER.readValue(statsJson, Map.class);
-            Map<String, Object> advMap = JSON_MAPPER.readValue(advJson, Map.class);
+            if (config == null || config.syncStats) {
+                String statsJson = readText(server.getWorldPath(LevelResource.PLAYER_STATS_DIR).resolve(uuid + ".json"));
+                statsMap = JSON_MAPPER.readValue(statsJson, Map.class);
+            }
+
+            if (config == null || config.syncAdvancements) {
+                String advJson = readText(server.getWorldPath(LevelResource.PLAYER_ADVANCEMENTS_DIR).resolve(uuid + ".json"));
+                advMap = JSON_MAPPER.readValue(advJson, Map.class);
+            }
 
             NATSPlayerDataBridge.debugLog("Sync: Packing bundle for {} [NBT: {}b, Stats: {} top-level keys, Adv: {} keys]", 
                 player.getName().getString(), nbtBytes.length, statsMap.size(), advMap.size());
@@ -133,6 +142,8 @@ public class PlayerDataManager {
      * Fetches cluster data and writes it to local disk before Minecraft loads it.
      */
     public static java.util.Optional<CompoundTag> fetchAndApply(UUID uuid, MinecraftServer server) {
+        BridgeConfig config = NATSPlayerDataBridge.getConfig();
+        
         // SESSION LOCK: Only pull if we are the ones joining (no lock owner yet)
         String owner = PlayerPresenceManager.getLastKnownServer(uuid);
         String localServerId = savage.natsfabric.NatsManager.getInstance().getServerName();
@@ -185,9 +196,14 @@ public class PlayerDataManager {
             NbtIo.writeCompressed(finalTag, bos);
             writeBinary(server.getWorldPath(LevelResource.PLAYER_DATA_DIR).resolve(uuid + ".dat"), bos.toByteArray());
 
-            // Note: Stats and advancements are still entirely replaced (common for multi-server setups)
-            writeText(server.getWorldPath(LevelResource.PLAYER_STATS_DIR).resolve(uuid + ".json"), JSON_MAPPER.writeValueAsString(bundle.stats()));
-            writeText(server.getWorldPath(LevelResource.PLAYER_ADVANCEMENTS_DIR).resolve(uuid + ".json"), JSON_MAPPER.writeValueAsString(bundle.advancements()));
+            // 6. Write Stats and Advancements only if enabled AND data was actually synced
+            if ((config == null || config.syncStats) && !bundle.stats().isEmpty()) {
+                writeText(server.getWorldPath(LevelResource.PLAYER_STATS_DIR).resolve(uuid + ".json"), JSON_MAPPER.writeValueAsString(bundle.stats()));
+            }
+            
+            if ((config == null || config.syncAdvancements) && !bundle.advancements().isEmpty()) {
+                writeText(server.getWorldPath(LevelResource.PLAYER_ADVANCEMENTS_DIR).resolve(uuid + ".json"), JSON_MAPPER.writeValueAsString(bundle.advancements()));
+            }
             
             NATSPlayerDataBridge.debugLog("Cluster: Applied NATS bundle merge for {}", uuid);
             

@@ -23,6 +23,12 @@ public class BridgeConfig {
     /** Whether to enable verbose debug logging. */
     public boolean debug = false;
 
+    /** Whether to synchronize player statistics. */
+    public boolean syncStats = true;
+
+    /** Whether to synchronize player advancements. */
+    public boolean syncAdvancements = true;
+
     /** 
      * Mode for NBT filtering. 
      * "blacklist" = sync everything except keys in filterKeys.
