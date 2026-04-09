@@ -7,6 +7,7 @@ import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
+import savage.natsplayerdata.NATSPlayerDataBridge;
 import savage.natsplayerdata.PlayerPresenceManager;
 
 import java.net.SocketAddress;
@@ -34,7 +35,7 @@ public abstract class LoginPresenceMixin {
             // 2. Check for duplicate session
             boolean online = PlayerPresenceManager.isAlreadyOnline(uuid);
             
-            savage.natsplayerdata.NATSPlayerDataBridge.LOGGER.info("Cluster: Checking presence for {} ({}). Already online: {}", 
+            NATSPlayerDataBridge.debugLog("Cluster: Checking presence for {} ({}). Already online: {}", 
                 nameAndId.name(), uuid, online);
             
             if (online) {

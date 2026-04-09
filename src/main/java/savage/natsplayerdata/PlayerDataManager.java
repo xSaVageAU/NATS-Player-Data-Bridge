@@ -14,7 +14,6 @@ import java.io.File;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
-import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
@@ -27,7 +26,6 @@ import java.util.concurrent.TimeUnit;
  */
 public class PlayerDataManager {
 
-    private static final LevelResource ROOT = LevelResource.ROOT;
     private static final Map<UUID, CompletableFuture<Optional<PlayerDataBundle>>> PENDING_FETCHES = new ConcurrentHashMap<>();
     private static final com.fasterxml.jackson.databind.ObjectMapper JSON_MAPPER = new com.fasterxml.jackson.databind.ObjectMapper();
 
@@ -38,7 +36,7 @@ public class PlayerDataManager {
     public static void requestAsyncFetch(UUID uuid) {
         if (PENDING_FETCHES.containsKey(uuid)) return;
         
-        NATSPlayerDataBridge.LOGGER.info("Cluster: Starting async pre-fetch for {}", uuid);
+        NATSPlayerDataBridge.debugLog("Cluster: Starting async pre-fetch for {}", uuid);
         CompletableFuture<Optional<PlayerDataBundle>> future = PlayerStorage.getInstance().fetchBundleAsync(uuid);
         PENDING_FETCHES.put(uuid, future);
         
@@ -86,7 +84,7 @@ public class PlayerDataManager {
             Map<String, Object> statsMap = JSON_MAPPER.readValue(statsJson, Map.class);
             Map<String, Object> advMap = JSON_MAPPER.readValue(advJson, Map.class);
 
-            NATSPlayerDataBridge.LOGGER.info("Sync: Packing bundle for {} [NBT: {}b, Stats: {} top-level keys, Adv: {} keys]", 
+            NATSPlayerDataBridge.debugLog("Sync: Packing bundle for {} [NBT: {}b, Stats: {} top-level keys, Adv: {} keys]", 
                 player.getName().getString(), nbtBytes.length, statsMap.size(), advMap.size());
 
             PlayerDataBundle bundle = new PlayerDataBundle(
@@ -120,7 +118,7 @@ public class PlayerDataManager {
             try {
                 // Wait for the async fetch to complete (max 5s timeout to prevent hanging the main thread indefinitely)
                 bundleOpt = future.get(5, TimeUnit.SECONDS);
-                NATSPlayerDataBridge.LOGGER.info("Cluster: Consumed async pre-fetch for {}", uuid);
+                NATSPlayerDataBridge.debugLog("Cluster: Consumed async pre-fetch for {}", uuid);
             } catch (Exception e) {
                 NATSPlayerDataBridge.LOGGER.warn("Cluster: Async pre-fetch failed or timed out for {}: {}", uuid, e.getMessage());
                 bundleOpt = PlayerStorage.getInstance().fetchBundle(uuid); // Fallback to sync fetch
@@ -134,7 +132,7 @@ public class PlayerDataManager {
 
         PlayerDataBundle bundle = bundleOpt.get();
         try {
-            NATSPlayerDataBridge.LOGGER.info("Sync: Unpacking bundle for {} [NBT: {}b, Stats: {} keys, Adv: {} keys]", 
+            NATSPlayerDataBridge.debugLog("Sync: Unpacking bundle for {} [NBT: {}b, Stats: {} keys, Adv: {} keys]", 
                 uuid, bundle.nbt().length, bundle.stats().size(), bundle.advancements().size());
 
             // Read RAW NBT from bundle
@@ -150,7 +148,7 @@ public class PlayerDataManager {
             writeText(server.getWorldPath(LevelResource.PLAYER_STATS_DIR).resolve(uuid + ".json"), JSON_MAPPER.writeValueAsString(bundle.stats()));
             writeText(server.getWorldPath(LevelResource.PLAYER_ADVANCEMENTS_DIR).resolve(uuid + ".json"), JSON_MAPPER.writeValueAsString(bundle.advancements()));
             
-            NATSPlayerDataBridge.LOGGER.info("Cluster: Applied NATS bundle for {}", uuid);
+            NATSPlayerDataBridge.debugLog("Cluster: Applied NATS bundle for {}", uuid);
             
             int version = net.minecraft.nbt.NbtUtils.getDataVersion(tag);
             tag = net.minecraft.util.datafix.DataFixTypes.PLAYER.updateToCurrentVersion(server.getFixerUpper(), tag, version);

@@ -41,7 +41,7 @@ public class PlayerPresenceManager {
             // Initial Join: Atomic create to act as a lock
             boolean locked = tryLock(uuid, name, serverId);
             if (locked) {
-                NATSPlayerDataBridge.LOGGER.info("Presence: Lock ACQUIRED for {} ({}) on {}", name, uuid, serverId);
+                NATSPlayerDataBridge.debugLog("Presence: Lock ACQUIRED for {} ({}) on {}", name, uuid, serverId);
             } else {
                 NATSPlayerDataBridge.LOGGER.warn("Presence: Lock FAILED for {} ({}) - already online elsewhere!", name, uuid);
             }
@@ -90,7 +90,7 @@ public class PlayerPresenceManager {
      */
     public static void leave(ServerPlayer player) {
         UUID uuid = player.getUUID();
-        NATSPlayerDataBridge.LOGGER.info("Presence: Player {} ({}) disconnected", player.getName().getString(), uuid);
+        NATSPlayerDataBridge.debugLog("Presence: Player {} ({}) disconnected", player.getName().getString(), uuid);
         PlayerStorage.getInstance().clearPresence(uuid);
     }
 
@@ -126,10 +126,10 @@ public class PlayerPresenceManager {
     public static void updateLocalCache(UUID uuid, String rawValue) {
         if (rawValue == null) {
             LOCAL_CACHE.remove(uuid);
-            NATSPlayerDataBridge.LOGGER.info("Cache: Removed presence for {} (Cache Size: {})", uuid, LOCAL_CACHE.size());
+            NATSPlayerDataBridge.debugLog("Cache: Removed presence for {} (Cache Size: {})", uuid, LOCAL_CACHE.size());
         } else {
             LOCAL_CACHE.put(uuid, new CacheEntry(rawValue, System.currentTimeMillis()));
-            NATSPlayerDataBridge.LOGGER.info("Cache: Updated presence for {} -> {} (Cache Size: {})", uuid, rawValue, LOCAL_CACHE.size());
+            NATSPlayerDataBridge.debugLog("Cache: Updated presence for {} -> {} (Cache Size: {})", uuid, rawValue, LOCAL_CACHE.size());
         }
     }
 
@@ -137,7 +137,7 @@ public class PlayerPresenceManager {
      * Re-registers all currently online players on this server to the NATS cluster.
      */
     public static void reSyncLocalPlayers(net.minecraft.server.MinecraftServer server) {
-        NATSPlayerDataBridge.LOGGER.info("Presence: Re-syncing local players to cluster...");
+        NATSPlayerDataBridge.debugLog("Presence: Re-syncing local players to cluster...");
         for (ServerPlayer player : server.getPlayerList().getPlayers()) {
             join(player, false);
         }

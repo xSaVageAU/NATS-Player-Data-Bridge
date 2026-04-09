@@ -7,6 +7,7 @@ import net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents;
 import net.minecraft.commands.Commands;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.MinecraftServer;
+import savage.natsplayerdata.config.BridgeConfig;
 import savage.natsplayerdata.storage.PlayerStorage;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -18,6 +19,7 @@ import org.slf4j.LoggerFactory;
 public class NATSPlayerDataBridge implements ModInitializer {
 	public static final String MOD_ID = "nats-player-data-bridge";
 	public static final Logger LOGGER = LoggerFactory.getLogger(MOD_ID);
+	private static BridgeConfig config;
 
 	private static MinecraftServer SERVER;
 
@@ -25,13 +27,20 @@ public class NATSPlayerDataBridge implements ModInitializer {
 		return SERVER;
 	}
 
+	public static void debugLog(String message, Object... args) {
+		if (config != null && config.debug) {
+			LOGGER.info("[DEBUG] " + message, args);
+		}
+	}
+
 	@Override
 	public void onInitialize() {
 		LOGGER.info("NATS Player Data Bridge: Initializing real-time synchronization cache...");
+		config = BridgeConfig.load();
 
 		ServerLifecycleEvents.SERVER_STARTED.register(server -> {
 			SERVER = server;
-			LOGGER.info("NATS Bridge: Global server instance captured.");
+			debugLog("NATS Bridge: Global server instance captured.");
 			
 			// Initialize storage and start watcher
 			PlayerStorage.getInstance();
@@ -46,7 +55,7 @@ public class NATSPlayerDataBridge implements ModInitializer {
 
 		// Register Join Event (Set Presence)
 		ServerPlayConnectionEvents.JOIN.register((handler, sender, server) -> {
-			LOGGER.info("Event: Player joined {}, setting presence...", handler.getPlayer().getName().getString());
+			debugLog("Event: Player joined {}, setting presence...", handler.getPlayer().getName().getString());
 			boolean locked = PlayerPresenceManager.join(handler.getPlayer(), false); // Initial Lock
 			
 			// Failsafe: If they somehow got past the canPlayerLogin check, disconnect them now.
@@ -58,7 +67,7 @@ public class NATSPlayerDataBridge implements ModInitializer {
 
 		// Register Disconnect Event (Clear Presence & Save Bundle)
 		ServerPlayConnectionEvents.DISCONNECT.register((handler, server) -> {
-			LOGGER.info("Event: Player disconnected {}, clearing presence and packing data bundle...", handler.getPlayer().getName().getString());
+			debugLog("Event: Player disconnected {}, clearing presence and packing data bundle...", handler.getPlayer().getName().getString());
 			PlayerPresenceManager.leave(handler.getPlayer());
 			PlayerDataManager.prepareAndPush(handler.getPlayer(), server);
 		});
@@ -67,7 +76,7 @@ public class NATSPlayerDataBridge implements ModInitializer {
 		ServerLifecycleEvents.AFTER_SAVE.register((server, flush, force) -> {
 			var players = server.getPlayerList().getPlayers();
 			if (!players.isEmpty()) {
-				LOGGER.info("Cluster: Auto-save detected, pushing checkpoints for {} players...", players.size());
+				debugLog("Cluster: Auto-save detected, pushing checkpoints for {} players...", players.size());
 				for (var player : players) {
 					PlayerDataManager.prepareAndPush(player, server);
 				}
@@ -125,10 +134,10 @@ public class NATSPlayerDataBridge implements ModInitializer {
 			var conn = savage.natsfabric.NatsManager.getInstance().getConnection();
 			if (conn != null) {
 				conn.createDispatcher(msg -> {
-					LOGGER.info("Cluster: Received presence reset request.");
+					debugLog("Cluster: Received presence reset request.");
 					PlayerPresenceManager.reSyncLocalPlayers(server);
 				}).subscribe("player-presence.reset");
-				LOGGER.info("NATS Bridge: Subscribed to presence reset topic.");
+				debugLog("NATS Bridge: Subscribed to presence reset topic.");
 			}
 		});
 
@@ -144,7 +153,7 @@ public class NATSPlayerDataBridge implements ModInitializer {
 					
 					var players = SERVER.getPlayerList().getPlayers();
 					if (!players.isEmpty()) {
-						LOGGER.info("Cluster: Refreshing presence for {} online players...", players.size());
+						debugLog("Cluster: Refreshing presence for {} online players...", players.size());
 						for (var player : players) {
 							PlayerPresenceManager.join(player, true);
 						}

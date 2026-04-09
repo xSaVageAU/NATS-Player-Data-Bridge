@@ -129,7 +129,7 @@ public class PlayerStorage {
 
                     @Override
                     public void endOfData() {
-                        NATSPlayerDataBridge.LOGGER.info("Cluster: Presence cache initial sync complete.");
+                        NATSPlayerDataBridge.debugLog("Cluster: Presence cache initial sync complete.");
                     }
                 });
             }
@@ -185,7 +185,7 @@ public class PlayerStorage {
             for (String key : keys) {
                 presenceBucket.delete(key);
             }
-            NATSPlayerDataBridge.LOGGER.info("Cluster: Presence bucket purged.");
+            NATSPlayerDataBridge.debugLog("Cluster: Presence bucket purged.");
         } catch (Exception e) {
             NATSPlayerDataBridge.LOGGER.error("Failed to purge presence bucket: {}", e.getMessage());
         }
@@ -206,7 +206,7 @@ public class PlayerStorage {
             double compressMs = compressNanos / 1_000_000.0;
             
             kvBucket.put(bundle.uuid().toString(), compressedBinary);
-            NATSPlayerDataBridge.LOGGER.info("Cluster: Pushed {} bytes (Zstd compressed from {} bytes in {}ms) bundle for {}", compressedBinary.length, cborBinary.length, String.format("%.2f", compressMs), bundle.uuid());
+            NATSPlayerDataBridge.debugLog("Cluster: Pushed {} bytes (Zstd compressed from {} bytes in {}ms) bundle for {}", compressedBinary.length, cborBinary.length, String.format("%.2f", compressMs), bundle.uuid());
         } catch (Exception e) {
             NATSPlayerDataBridge.LOGGER.error("Failed to push CBOR bundle: {}", e.getMessage());
         }
@@ -231,7 +231,7 @@ public class PlayerStorage {
             long decompressNanos = System.nanoTime() - startNanos;
             double decompressMs = decompressNanos / 1_000_000.0;
             
-            NATSPlayerDataBridge.LOGGER.info("Cluster: Fetched {} bytes (Zstd decompressed to {} bytes in {}ms) bundle for {}", compressedBinary.length, decompressedBinary.length, String.format("%.2f", decompressMs), uuid);
+            NATSPlayerDataBridge.debugLog("Cluster: Fetched {} bytes (Zstd decompressed to {} bytes in {}ms) bundle for {}", compressedBinary.length, decompressedBinary.length, String.format("%.2f", decompressMs), uuid);
             
             PlayerDataBundle bundle = CBOR_MAPPER.readValue(decompressedBinary, PlayerDataBundle.class);
             return Optional.of(bundle);
