@@ -151,18 +151,6 @@ public class PlayerStorage {
         }
     }
 
-    /**
-     * Updates a player's presence in the cluster.
-     */
-    public void updatePresence(UUID uuid, String name, String serverId) {
-        if (presenceBucket == null) return;
-        try {
-            String value = name + "|" + serverId;
-            presenceBucket.put(uuid.toString(), value.getBytes(java.nio.charset.StandardCharsets.UTF_8));
-        } catch (Exception e) {
-            NATSPlayerDataBridge.LOGGER.error("Failed to update presence for {}: {}", uuid, e.getMessage());
-        }
-    }
 
     /**
      * Clears a player's presence from the cluster.

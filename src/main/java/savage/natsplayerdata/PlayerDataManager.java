@@ -237,8 +237,6 @@ public class PlayerDataManager {
         if (!file.exists()) return "{}";
         
         String content = FileUtils.readFileToString(file, StandardCharsets.UTF_8);
-        
-        
 
         return content;
     }
