@@ -41,6 +41,12 @@ public class BridgeConfig {
      */
     public List<String> filterKeys = new ArrayList<>();
 
+    /** The NATS KV bucket name for player data sync. */
+    public String dataBucketName = "player-sync-v1";
+
+    /** The NATS KV bucket name for the ephemeral presence locks. */
+    public String presenceBucketName = "player-presence-v1";
+
     public BridgeConfig() {
         filterKeys.add("Inventory");
         filterKeys.add("EnderItems");
@@ -56,6 +62,7 @@ public class BridgeConfig {
         filterKeys.add("XpTotal");
         filterKeys.add("active_effects");
         filterKeys.add("AbsorptionAmount");
+        filterKeys.add("equipment");
 
     }
 

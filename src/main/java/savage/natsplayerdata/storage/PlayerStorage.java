@@ -16,8 +16,6 @@ import java.util.UUID;
  */
 public class PlayerStorage {
 
-    private static final String BUCKET_NAME = "player-sync-v1";
-    private static final String PRESENCE_BUCKET = "player-presence-v1";
     private static final ObjectMapper CBOR_MAPPER = new ObjectMapper(new CBORFactory());
     private static PlayerStorage instance;
 
@@ -38,6 +36,11 @@ public class PlayerStorage {
     }
 
     private void init() {
+        String dataBucketName = NATSPlayerDataBridge.getConfig() != null && NATSPlayerDataBridge.getConfig().dataBucketName != null 
+                ? NATSPlayerDataBridge.getConfig().dataBucketName : "player-sync-v1";
+        String presenceBucketName = NATSPlayerDataBridge.getConfig() != null && NATSPlayerDataBridge.getConfig().presenceBucketName != null 
+                ? NATSPlayerDataBridge.getConfig().presenceBucketName : "player-presence-v1";
+
         try {
             var conn = NatsManager.getInstance().getConnection();
             if (conn == null) {
@@ -47,21 +50,21 @@ public class PlayerStorage {
 
             // Sync bucket (persistent)
             try {
-                kvBucket = conn.keyValue(BUCKET_NAME);
+                kvBucket = conn.keyValue(dataBucketName);
             } catch (Exception e) {
                 try {
                     io.nats.client.KeyValueManagement kvm = conn.keyValueManagement();
                     kvm.create(io.nats.client.api.KeyValueConfiguration.builder()
-                        .name(BUCKET_NAME)
+                        .name(dataBucketName)
                         .build());
-                    kvBucket = conn.keyValue(BUCKET_NAME);
+                    kvBucket = conn.keyValue(dataBucketName);
                 } catch (Exception e2) {
-                    NATSPlayerDataBridge.LOGGER.error("Synchronizer: Failed to create sync bucket '{}': {}", BUCKET_NAME, e2.getMessage());
+                    NATSPlayerDataBridge.LOGGER.error("Synchronizer: Failed to create sync bucket '{}': {}", dataBucketName, e2.getMessage());
                 }
             }
 
             if (kvBucket == null) {
-                NATSPlayerDataBridge.LOGGER.error("Synchronizer: Bucket '{}' not available!", BUCKET_NAME);
+                NATSPlayerDataBridge.LOGGER.error("Synchronizer: Bucket '{}' not available!", dataBucketName);
             }
             
             // Presence bucket with 60s TTL
@@ -69,12 +72,12 @@ public class PlayerStorage {
                 io.nats.client.KeyValueManagement kvm = conn.keyValueManagement();
                 boolean create = false;
                 try {
-                    io.nats.client.api.KeyValueStatus status = kvm.getStatus(PRESENCE_BUCKET);
+                    io.nats.client.api.KeyValueStatus status = kvm.getStatus(presenceBucketName);
                     // Check if it's currently persistent or has no TTL
                     if (status.getConfiguration().getStorageType() != io.nats.client.api.StorageType.Memory || status.getConfiguration().getTtl().toSeconds() != 60) {
                         NATSPlayerDataBridge.LOGGER.warn("Cluster: Presence bucket exists with wrong config (Storage: {}, TTL: {}s). Recreating...", 
                             status.getConfiguration().getStorageType(), status.getConfiguration().getTtl().toSeconds());
-                        kvm.delete(PRESENCE_BUCKET);
+                        kvm.delete(presenceBucketName);
                         create = true;
                     }
                 } catch (Exception e) {
@@ -84,18 +87,18 @@ public class PlayerStorage {
 
                 if (create) {
                     kvm.create(io.nats.client.api.KeyValueConfiguration.builder()
-                        .name(PRESENCE_BUCKET)
+                        .name(presenceBucketName)
                         .ttl(java.time.Duration.ofSeconds(60))
                         .storageType(io.nats.client.api.StorageType.Memory)
                         .build());
                 }
-                presenceBucket = conn.keyValue(PRESENCE_BUCKET);
+                presenceBucket = conn.keyValue(presenceBucketName);
             } catch (Exception e) {
                 NATSPlayerDataBridge.LOGGER.error("Cluster: Failed to setup ephemeral presence bucket: {}", e.getMessage());
             }
 
             if (presenceBucket == null) {
-                NATSPlayerDataBridge.LOGGER.warn("Synchronizer: Presence bucket '{}' not available!", PRESENCE_BUCKET);
+                NATSPlayerDataBridge.LOGGER.warn("Synchronizer: Presence bucket '{}' not available!", presenceBucketName);
             } else {
                 startPresenceWatcher();
             }
