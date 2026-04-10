@@ -124,7 +124,9 @@ public class PlayerStorage {
                                 String rawValue = new String(entry.getValue(), java.nio.charset.StandardCharsets.UTF_8);
                                 savage.natsplayerdata.PlayerPresenceManager.updateLocalCache(uuid, rawValue);
                             }
-                        } catch (Exception ignored) {}
+                        } catch (Exception e) {
+                            NATSPlayerDataBridge.LOGGER.warn("Cluster: Presence watcher entry error: {}", e.getMessage());
+                        }
                     }
 
                     @Override
