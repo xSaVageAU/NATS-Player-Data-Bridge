@@ -187,6 +187,29 @@ public class PlayerDataManager {
                 finalTag.put(key, natsTag.get(key));
             }
 
+            // 3b. Handle keys that were omitted from the NATS bundle (e.g., emptied slots).
+            // Without this, the merge silently falls back to the stale local disk data for
+            // missing keys, causing duplication of dropped or cleared items.
+            if (config != null) {
+                if ("whitelist".equalsIgnoreCase(config.filterMode)) {
+                    for (String key : config.filterKeys) {
+                        if (!natsTag.contains(key)) {
+                            finalTag.remove(key);
+                        }
+                    }
+                } else if ("blacklist".equalsIgnoreCase(config.filterMode)) {
+                    // Iterate over a safe copy of the keys to avoid ConcurrentModificationException
+                    java.util.Set<String> localKeys = new java.util.HashSet<>(finalTag.keySet());
+                    for (String localKey : localKeys) {
+                        // If it's not coming from NATS, and we didn't explicitly blacklist it,
+                        // it must have been emptied/omitted by the source server. Delete it.
+                        if (!natsTag.contains(localKey) && !config.filterKeys.contains(localKey)) {
+                            finalTag.remove(localKey);
+                        }
+                    }
+                }
+            }
+
             // 4. Update the combined result to current version
             int version = net.minecraft.nbt.NbtUtils.getDataVersion(finalTag);
             finalTag = net.minecraft.util.datafix.DataFixTypes.PLAYER.updateToCurrentVersion(server.getFixerUpper(), finalTag, version);
