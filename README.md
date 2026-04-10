@@ -16,6 +16,10 @@ By default, inventory contents, ender chest, XP, hunger, and credits status are 
 
 Players are locked to one server at a time using an atomic presence lock in NATS. If a player tries to join a second server while already online, they are rejected. Presence keys auto-expire after 60 seconds to recover from crashes.
 
+## Data integrity protection
+
+If a NATS node goes offline, or data is corrupted/fails to decompress during a server transition, the bridge will immediately abort the login connection. This is designed to prevent Minecraft from loading stale local disk data and protect against inventory rollbacks.
+
 ## Requirements
 
 - Minecraft 26.1.1 (Fabric)
@@ -51,7 +55,11 @@ All commands require operator permissions.
 | `syncStats` | `true` | Sync player statistics |
 | `syncAdvancements` | `true` | Sync player advancements |
 | `filterMode` | `"whitelist"` | `"blacklist"` or `"whitelist"` for NBT key filtering |
-| `filterKeys` | `["Inventory", "EnderItems", "SelectedItemSlot", "foodExhaustionLevel", "foodLevel", "foodSaturationLevel", "foodTickTimer", "seenCredits", "XpLevel", "XpP", "XpTotal"]` | NBT keys to filter |
+| `filterKeys` | `["Inventory", "EnderItems", "SelectedItemSlot", "Health", "foodExhaustionLevel", "foodLevel", "foodSaturationLevel", "foodTickTimer", "seenCredits", "XpLevel", "XpP", "XpTotal", "active_effects", "AbsorptionAmount", "equipment"]` | NBT keys to filter |
+| `dataBucketName` | `"player-sync-v1"` | NATS KV bucket for player data storage |
+| `presenceBucketName` | `"player-presence-v1"` | NATS KV bucket for ephemeral presence locks |
+
+*Tip: If you run multiple isolated clusters (like a Dev and Prod network) on the same NATS server, simply change the bucket names here to keep their data separated.*
 
 ## License
 
