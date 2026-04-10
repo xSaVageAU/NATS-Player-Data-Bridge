@@ -115,14 +115,20 @@ public class PlayerStorage {
                     public void watch(io.nats.client.api.KeyValueEntry entry) {
                         try {
                             String key = entry.getKey();
-                            if (key.startsWith("_KV")) return; 
+                            if (key.startsWith("_KV")) return;
                             UUID uuid = UUID.fromString(key);
-                            
+
+                            // Use the NATS entry's actual write time so that replayed startup entries
+                            // inherit their real age rather than getting a fresh 60s local TTL.
+                            long natsTimestamp = entry.getCreated() != null
+                                    ? entry.getCreated().toInstant().toEpochMilli()
+                                    : System.currentTimeMillis();
+
                             if (entry.getValue() == null || entry.getOperation() == io.nats.client.api.KeyValueOperation.DELETE || entry.getOperation() == io.nats.client.api.KeyValueOperation.PURGE) {
-                                savage.natsplayerdata.PlayerPresenceManager.updateLocalCache(uuid, null);
+                                savage.natsplayerdata.PlayerPresenceManager.updateLocalCache(uuid, null, 0);
                             } else {
                                 String rawValue = new String(entry.getValue(), java.nio.charset.StandardCharsets.UTF_8);
-                                savage.natsplayerdata.PlayerPresenceManager.updateLocalCache(uuid, rawValue);
+                                savage.natsplayerdata.PlayerPresenceManager.updateLocalCache(uuid, rawValue, natsTimestamp);
                             }
                         } catch (Exception e) {
                             NATSPlayerDataBridge.LOGGER.warn("Cluster: Presence watcher entry error: {}", e.getMessage());

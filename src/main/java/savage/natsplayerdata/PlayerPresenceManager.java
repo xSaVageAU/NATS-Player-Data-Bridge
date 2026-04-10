@@ -123,12 +123,12 @@ public class PlayerPresenceManager {
     /**
      * Updates the local cache from Watcher events.
      */
-    public static void updateLocalCache(UUID uuid, String rawValue) {
+    public static void updateLocalCache(UUID uuid, String rawValue, long timestamp) {
         if (rawValue == null) {
             LOCAL_CACHE.remove(uuid);
             NATSPlayerDataBridge.debugLog("Cache: Removed presence for {} (Cache Size: {})", uuid, LOCAL_CACHE.size());
         } else {
-            LOCAL_CACHE.put(uuid, new CacheEntry(rawValue, System.currentTimeMillis()));
+            LOCAL_CACHE.put(uuid, new CacheEntry(rawValue, timestamp));
             NATSPlayerDataBridge.debugLog("Cache: Updated presence for {} -> {} (Cache Size: {})", uuid, rawValue, LOCAL_CACHE.size());
         }
     }
@@ -148,7 +148,11 @@ public class PlayerPresenceManager {
      */
     public static Map<String, String> getClusterOnline() {
         Map<String, String> results = new java.util.HashMap<>();
-        LOCAL_CACHE.forEach((uuid, entry) -> results.put(uuid.toString(), entry.rawValue()));
+        LOCAL_CACHE.forEach((uuid, entry) -> {
+            if (!entry.isExpired()) {
+                results.put(uuid.toString(), entry.rawValue());
+            }
+        });
         return results;
     }
 }
