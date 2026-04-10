@@ -238,12 +238,8 @@ public class PlayerDataManager {
         
         String content = FileUtils.readFileToString(file, StandardCharsets.UTF_8);
         
-        // If content is empty or just {}, try one more time after a tiny delay (race condition protection)
-        if (content.length() <= 2) {
-            try { Thread.sleep(50); } catch (InterruptedException ignored) {}
-            content = FileUtils.readFileToString(file, StandardCharsets.UTF_8);
-        }
         
+
         return content;
     }
 

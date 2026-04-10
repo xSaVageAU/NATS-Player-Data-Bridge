@@ -148,14 +148,7 @@ public class PlayerPresenceManager {
      */
     public static Map<String, String> getClusterOnline() {
         Map<String, String> results = new java.util.HashMap<>();
-        long now = System.currentTimeMillis();
-        LOCAL_CACHE.forEach((uuid, entry) -> {
-            if (!entry.isExpired()) {
-                results.put(uuid.toString(), entry.rawValue());
-            }
-        });
-        // Cleanup expired entries from main cache
-        LOCAL_CACHE.entrySet().removeIf(e -> e.getValue().isExpired());
+        LOCAL_CACHE.forEach((uuid, entry) -> results.put(uuid.toString(), entry.rawValue()));
         return results;
     }
 }
