@@ -3,17 +3,17 @@
 	"id": "nats-player-data-bridge",
 	"version": "${version}",
 	"name": "NATS Player Data Bridge",
-	"description": "This is an example description! Tell everyone what your mod is about!",
+	"description": "Synchronizes player state (NBT, Stats, Advancements) across server clusters using NATS.",
 	"authors": [
-		"Me!"
+		"xSaVageAU"
 	],
 	"contact": {
-		"homepage": "https://fabricmc.net/",
-		"sources": "https://github.com/FabricMC/fabric-example-mod"
+		"homepage": "https://github.com/xSaVageAU/NATS-Player-Data-Bridge",
+		"sources": "https://github.com/xSaVageAU/NATS-Player-Data-Bridge"
 	},
 	"license": "MIT",
 	"icon": "assets/nats-player-data-bridge/icon.png",
-	"environment": "*",
+	"environment": "server",
 	"entrypoints": {
 		"main": [
 			"savage.natsplayerdata.NATSPlayerDataBridge"
@@ -26,6 +26,7 @@
 		"fabricloader": ">=0.18.6",
 		"minecraft": "~26.1.1",
 		"java": ">=25",
-		"fabric-api": "*"
+		"fabric-api": "*",
+		"nats-fabric": ">=1.0.0"
 	}
 }
