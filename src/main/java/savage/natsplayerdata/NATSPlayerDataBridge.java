@@ -134,7 +134,10 @@ public class NATSPlayerDataBridge implements ModInitializer {
 							// 2. Notify all servers to re-sync
 							var conn = savage.natsfabric.NatsManager.getInstance().getConnection();
 							if (conn != null) {
-								conn.publish("player-presence.reset", new byte[0]);
+								// Derive the reset topic from the configured bucket name so multi-cluster
+								// setups on the same NATS server don't cross-contaminate each other.
+								String resetTopic = (config != null && config.presenceBucketName != null ? config.presenceBucketName : "player-presence-v1") + ".reset";
+								conn.publish(resetTopic, new byte[0]);
 								ctx.getSource().sendSuccess(() -> Component.literal("§aPresence reset triggered! Purged bucket and notified cluster."), true);
 							} else {
 								ctx.getSource().sendFailure(Component.literal("§cNATS connection unavailable."));
@@ -147,10 +150,11 @@ public class NATSPlayerDataBridge implements ModInitializer {
 		ServerLifecycleEvents.SERVER_STARTED.register(server -> {
 			var conn = savage.natsfabric.NatsManager.getInstance().getConnection();
 			if (conn != null) {
-				conn.createDispatcher(msg -> {
-					debugLog("Cluster: Received presence reset request.");
-					PlayerPresenceManager.reSyncLocalPlayers(server);
-				}).subscribe("player-presence.reset");
+					String resetTopic = (getConfig() != null && getConfig().presenceBucketName != null ? getConfig().presenceBucketName : "player-presence-v1") + ".reset";
+					conn.createDispatcher(msg -> {
+						debugLog("Cluster: Received presence reset request.");
+						PlayerPresenceManager.reSyncLocalPlayers(server);
+					}).subscribe(resetTopic);
 				debugLog("NATS Bridge: Subscribed to presence reset topic.");
 			}
 		});

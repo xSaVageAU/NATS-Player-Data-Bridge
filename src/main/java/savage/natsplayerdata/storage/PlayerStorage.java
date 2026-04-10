@@ -17,18 +17,20 @@ import java.util.UUID;
 public class PlayerStorage {
 
     private static final ObjectMapper CBOR_MAPPER = new ObjectMapper(new CBORFactory());
-    private static PlayerStorage instance;
 
     private KeyValue kvBucket;
     private KeyValue presenceBucket;
+
+    private static final class Holder {
+        private static final PlayerStorage INSTANCE = new PlayerStorage();
+    }
 
     private PlayerStorage() {
         init();
     }
 
     public static PlayerStorage getInstance() {
-        if (instance == null) instance = new PlayerStorage();
-        return instance;
+        return Holder.INSTANCE;
     }
 
     public KeyValue getPresenceBucket() {
