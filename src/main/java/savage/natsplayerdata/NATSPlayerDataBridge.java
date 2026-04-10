@@ -155,10 +155,17 @@ public class NATSPlayerDataBridge implements ModInitializer {
 					Thread.sleep(30000); // 30 seconds
 					if (SERVER == null) break;
 					
-					var players = SERVER.getPlayerList().getPlayers();
-					if (!players.isEmpty()) {
-						debugLog("Cluster: Refreshing presence for {} online players...", players.size());
-						for (var player : players) {
+					// Take a snapshot of the player list on the main thread to safely iterate over.
+					java.util.concurrent.CompletableFuture<java.util.List<net.minecraft.server.level.ServerPlayer>> future = new java.util.concurrent.CompletableFuture<>();
+					server.execute(() -> {
+						future.complete(java.util.List.copyOf(server.getPlayerList().getPlayers()));
+					});
+					
+					var safePlayers = future.get();
+
+					if (!safePlayers.isEmpty()) {
+						debugLog("Cluster: Refreshing presence for {} online players...", safePlayers.size());
+						for (var player : safePlayers) {
 							PlayerPresenceManager.join(player, true);
 						}
 					}
