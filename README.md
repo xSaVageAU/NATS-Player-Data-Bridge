@@ -22,7 +22,7 @@ If a NATS node goes offline, or data is corrupted/fails to decompress during a s
 
 ## Requirements
 
-- Minecraft 26.1.1 (Fabric)
+- Minecraft 26.1+ (Fabric)
 - Java 25+
 - [NATS-Fabric](https://github.com/xSaVageAU/NATS-Fabric) library mod (installed separately)
 - A NATS server with JetStream enabled
