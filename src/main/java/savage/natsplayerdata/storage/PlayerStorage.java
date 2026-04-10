@@ -232,8 +232,11 @@ public class PlayerStorage {
             PlayerDataBundle bundle = CBOR_MAPPER.readValue(decompressedBinary, PlayerDataBundle.class);
             return Optional.of(bundle);
         } catch (Exception e) {
-            NATSPlayerDataBridge.LOGGER.error("Failed to fetch/decode CBOR bundle: {}", e.getMessage());
-            return Optional.empty();
+            NATSPlayerDataBridge.LOGGER.error("Failed to fetch/decode CBOR bundle for {}: {}", uuid, e.getMessage());
+            // Throwing here forces the login sequence to crash out. 
+            // This is safer than returning Optional.empty(), which would let Minecraft 
+            // load the stale local disk file and cause an inventory rollback.
+            throw new RuntimeException("§cFailed to load your player data from the cluster. Please try again.");
         }
     }
 
