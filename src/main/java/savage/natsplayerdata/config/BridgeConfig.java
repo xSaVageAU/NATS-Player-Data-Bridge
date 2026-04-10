@@ -17,8 +17,8 @@ import java.util.List;
 public class BridgeConfig {
 
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
-    private static final Path CONFIG_PATH =
-            FabricLoader.getInstance().getConfigDir().resolve("nats-player-data-bridge.json");
+    private static final Path CONFIG_PATH = FabricLoader.getInstance().getConfigDir()
+            .resolve("nats-player-data-bridge.json");
 
     /** Whether to enable verbose debug logging. */
     public boolean debug = false;
@@ -29,23 +29,34 @@ public class BridgeConfig {
     /** Whether to synchronize player advancements. */
     public boolean syncAdvancements = true;
 
-    /** 
-     * Mode for NBT filtering. 
+    /**
+     * Mode for NBT filtering.
      * "blacklist" = sync everything except keys in filterKeys.
      * "whitelist" = sync ONLY keys in filterKeys.
      */
-    public String filterMode = "blacklist";
+    public String filterMode = "whitelist";
 
-    /** 
+    /**
      * Top-level NBT keys to be filtered.
      */
     public List<String> filterKeys = new ArrayList<>();
 
     public BridgeConfig() {
-        // Default examples
-        filterKeys.add("Pos");
-        filterKeys.add("Rotation");
-        filterKeys.add("Dimension");
+        filterKeys.add("Inventory");
+        filterKeys.add("EnderItems");
+        filterKeys.add("SelectedItemSlot");
+        filterKeys.add("Health");
+        filterKeys.add("foodExhaustionLevel");
+        filterKeys.add("foodLevel");
+        filterKeys.add("foodSaturationLevel");
+        filterKeys.add("foodTickTimer");
+        filterKeys.add("seenCredits");
+        filterKeys.add("XpLevel");
+        filterKeys.add("XpP");
+        filterKeys.add("XpTotal");
+        filterKeys.add("active_effects");
+        filterKeys.add("AbsorptionAmount");
+
     }
 
     /**

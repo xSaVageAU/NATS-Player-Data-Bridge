@@ -68,7 +68,7 @@ public class PlayerDataManager {
         }
 
         try {
-            // Force save stats and advancements to disk before reading
+            // Save stats and advancements to disk before reading
             server.getPlayerList().getPlayerStats(player).save();
             server.getPlayerList().getPlayerAdvancements(player).save();
 
@@ -238,7 +238,7 @@ public class PlayerDataManager {
         
         String content = FileUtils.readFileToString(file, StandardCharsets.UTF_8);
 
-        return content;
+        return content.isBlank() ? "{}" : content;
     }
 
     private static void writeBinary(Path path, byte[] data) throws IOException {

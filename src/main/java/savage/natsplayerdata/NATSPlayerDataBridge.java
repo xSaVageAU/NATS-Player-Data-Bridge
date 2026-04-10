@@ -66,6 +66,16 @@ public class NATSPlayerDataBridge implements ModInitializer {
 			if (!locked) {
 				LOGGER.error("Event: CRITICAL LOCK FAILURE for {} - disconnecting.", handler.getPlayer().getName().getString());
 				handler.disconnect(Component.literal("§cCluster lock acquisition failed.\n§7You may already be online on another server."));
+				return;
+			}
+
+			// Force reload advancements from disk to pick up NATS-synced data.
+			// Minecraft's PlayerAdvancements may have loaded the old file before fetchAndApply wrote the new one.
+			try {
+				server.getPlayerList().getPlayerAdvancements(handler.getPlayer()).reload(server.getAdvancements());
+				debugLog("Cluster: Reloaded advancements from disk for {}", handler.getPlayer().getName().getString());
+			} catch (Exception e) {
+				LOGGER.warn("Cluster: Failed to reload advancements for {}: {}", handler.getPlayer().getName().getString(), e.getMessage());
 			}
 		});
 
@@ -73,7 +83,7 @@ public class NATSPlayerDataBridge implements ModInitializer {
 		ServerPlayConnectionEvents.DISCONNECT.register((handler, server) -> {
 			debugLog("Event: Player disconnected {}, clearing presence and packing data bundle...", handler.getPlayer().getName().getString());
 			PlayerPresenceManager.leave(handler.getPlayer());
-			PlayerDataManager.prepareAndPush(handler.getPlayer(), server);
+			server.execute(() -> PlayerDataManager.prepareAndPush(handler.getPlayer(), server));
 		});
 
 		// Periodic Cluster Checkpoints (Auto-save hook)
