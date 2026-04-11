@@ -80,13 +80,14 @@ public class BridgeEvents {
             }
 
             if (uuid != null) {
-                // Check if already locked by another server
+                // Guard: Cross-server duplicate session (NATS presence cache).
+                // Same-server duplicates are handled earlier via SameServerGuardMixin → canPlayerLogin().
                 if (PlayerPresenceManager.isAlreadyOnline(uuid)) {
                     handler.disconnect(Component.literal("§cYou are already online on another server in this cluster!"));
                     return;
                 }
 
-                // Wait for the bundle to finish downloading from the cluster without pausing the main thread!
+                // All clear — hold the login until NATS finishes downloading the bundle.
                 java.util.concurrent.CompletableFuture<?> fetchFuture = PlayerDataManager.requestAsyncFetch(uuid);
                 synchronizer.waitFor(fetchFuture);
             }
