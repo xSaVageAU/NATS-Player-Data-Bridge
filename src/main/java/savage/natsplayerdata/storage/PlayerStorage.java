@@ -7,6 +7,7 @@ import io.nats.client.api.KeyValueEntry;
 import savage.natsfabric.NatsManager;
 import savage.natsplayerdata.NATSPlayerDataBridge;
 import savage.natsplayerdata.model.PlayerDataBundle;
+import savage.natsplayerdata.util.CompressionUtil;
 
 import java.util.Optional;
 import java.util.UUID;
@@ -201,10 +202,8 @@ public class PlayerStorage {
             byte[] cborBinary = CBOR_MAPPER.writeValueAsBytes(bundle);
             
             long startNanos = System.nanoTime();
-            // Modern Zstd compression (Level 1 for maximum speed)
-            byte[] compressedBinary = com.github.luben.zstd.Zstd.compress(cborBinary, 1);
-            long compressNanos = System.nanoTime() - startNanos;
-            double compressMs = compressNanos / 1_000_000.0;
+            byte[] compressedBinary = CompressionUtil.compress(cborBinary);
+            double compressMs = (System.nanoTime() - startNanos) / 1_000_000.0;
             
             kvBucket.put(bundle.uuid().toString(), compressedBinary);
             NATSPlayerDataBridge.debugLog("Cluster: Pushed {} bytes (Zstd compressed from {} bytes in {}ms) bundle for {}", compressedBinary.length, cborBinary.length, String.format("%.2f", compressMs), bundle.uuid());
@@ -225,12 +224,8 @@ public class PlayerStorage {
             byte[] compressedBinary = entry.getValue();
             long startNanos = System.nanoTime();
             
-            // Modern Zstd decompression
-            long decompressedSize = com.github.luben.zstd.Zstd.decompressedSize(compressedBinary);
-            byte[] decompressedBinary = com.github.luben.zstd.Zstd.decompress(compressedBinary, (int) decompressedSize);
-            
-            long decompressNanos = System.nanoTime() - startNanos;
-            double decompressMs = decompressNanos / 1_000_000.0;
+            byte[] decompressedBinary = CompressionUtil.decompress(compressedBinary);
+            double decompressMs = (System.nanoTime() - startNanos) / 1_000_000.0;
             
             NATSPlayerDataBridge.debugLog("Cluster: Fetched {} bytes (Zstd decompressed to {} bytes in {}ms) bundle for {}", compressedBinary.length, decompressedBinary.length, String.format("%.2f", decompressMs), uuid);
             
