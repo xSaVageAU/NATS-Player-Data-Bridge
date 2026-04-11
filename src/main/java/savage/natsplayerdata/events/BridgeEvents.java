@@ -44,15 +44,6 @@ public class BridgeEvents {
                 handler.disconnect(Component.literal("§cCluster lock acquisition failed.\n§7You may already be online on another server."));
                 return;
             }
-
-            // Force reload advancements from disk to pick up NATS-synced data.
-            // Minecraft's PlayerAdvancements may have loaded the old file before fetchAndApply wrote the new one.
-            try {
-                server.getPlayerList().getPlayerAdvancements(handler.getPlayer()).reload(server.getAdvancements());
-                NATSPlayerDataBridge.debugLog("Cluster: Reloaded advancements from disk for {}", handler.getPlayer().getName().getString());
-            } catch (Exception e) {
-                NATSPlayerDataBridge.LOGGER.warn("Cluster: Failed to reload advancements for {}: {}", handler.getPlayer().getName().getString(), e.getMessage());
-            }
         });
 
         // Register Disconnect Event (Clear Presence & Save Bundle)
