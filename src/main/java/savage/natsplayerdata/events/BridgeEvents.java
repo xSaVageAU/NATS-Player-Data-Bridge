@@ -1,6 +1,7 @@
 package savage.natsplayerdata.events;
 
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
+import net.fabricmc.fabric.api.networking.v1.ServerLoginConnectionEvents;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents;
 import net.minecraft.network.chat.Component;
 import savage.natsplayerdata.NATSPlayerDataBridge;
@@ -69,6 +70,34 @@ public class BridgeEvents {
                 for (var player : players) {
                     PlayerDataManager.prepareAndPush(player, server);
                 }
+            }
+        });
+
+        // --- 1. EARLY BLOCK (NATS OFFLINE) ---
+        ServerLoginConnectionEvents.INIT.register((handler, server) -> {
+            if (!PlayerStorage.getInstance().isPresenceAvailable()) {
+                NATSPlayerDataBridge.LOGGER.error("Cluster: Rejecting login - NATS cluster is unreachable!");
+                handler.disconnect(Component.literal("§cAuthentication failed: Cluster connection unreachable. Please try again later."));
+            }
+        });
+
+        // --- 2. ASYNC NATS SYNC (NO TICK DROP) ---
+        ServerLoginConnectionEvents.QUERY_START.register((handler, server, sender, synchronizer) -> {
+            java.util.UUID uuid = null;
+            if (handler.authenticatedProfile != null) {
+                uuid = handler.authenticatedProfile.id();
+            }
+
+            if (uuid != null) {
+                // Check if already locked by another server
+                if (PlayerPresenceManager.isAlreadyOnline(uuid)) {
+                    handler.disconnect(Component.literal("§cYou are already online on another server in this cluster!"));
+                    return;
+                }
+
+                // Wait for the bundle to finish downloading from the cluster without pausing the main thread!
+                java.util.concurrent.CompletableFuture<?> fetchFuture = PlayerDataManager.requestAsyncFetch(uuid);
+                synchronizer.waitFor(fetchFuture);
             }
         });
     }

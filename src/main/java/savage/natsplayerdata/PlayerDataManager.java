@@ -32,8 +32,8 @@ public class PlayerDataManager {
      * Starts an asynchronous fetch for player data from the cluster.
      * This should be called early in the login process (e.g., PreLogin).
      */
-    public static void requestAsyncFetch(UUID uuid) {
-        if (PENDING_FETCHES.containsKey(uuid)) return;
+    public static java.util.concurrent.CompletableFuture<?> requestAsyncFetch(UUID uuid) {
+        if (PENDING_FETCHES.containsKey(uuid)) return PENDING_FETCHES.get(uuid);
         
         NATSPlayerDataBridge.debugLog("Cluster: Starting async pre-fetch for {}", uuid);
         CompletableFuture<Optional<PlayerDataBundle>> future = PlayerStorage.getInstance().fetchBundleAsync(uuid);
@@ -44,6 +44,8 @@ public class PlayerDataManager {
             // We don't remove here because we want fetchAndApply to find it. 
             // The removal happens in fetchAndApply.
         });
+        
+        return future;
     }
 
     /**

@@ -22,6 +22,7 @@
 	"mixins": [
 		"nats-player-data-bridge.mixins.json"
 	],
+	"accessWidener": "nats-player-data-bridge.accesswidener",
 	"depends": {
 		"fabricloader": ">=0.18.6",
 		"minecraft": ">=26.1",
