@@ -50,7 +50,7 @@ public class NATSPlayerDataBridge implements ModInitializer {
 			PlayerStorage.getInstance();
 
 			// Start Presence Heartbeat (Refresh every 30s for 60s TTL)
-			startPresenceHeartbeat(server);
+			savage.natsplayerdata.tasks.PresenceHeartbeatTask.start(server);
 		});
 
 		ServerLifecycleEvents.SERVER_STOPPING.register(server -> {
@@ -160,37 +160,5 @@ public class NATSPlayerDataBridge implements ModInitializer {
 		});
 
 		LOGGER.info("NATS Player Data Bridge: Binary CBOR engine ready.");
-	}
-
-	private void startPresenceHeartbeat(net.minecraft.server.MinecraftServer server) {
-		Thread heartbeat = new Thread(() -> {
-			while (SERVER != null) {
-				try {
-					Thread.sleep(30000); // 30 seconds
-					if (SERVER == null) break;
-					
-					// Take a snapshot of the player list on the main thread to safely iterate over.
-					java.util.concurrent.CompletableFuture<java.util.List<net.minecraft.server.level.ServerPlayer>> future = new java.util.concurrent.CompletableFuture<>();
-					server.execute(() -> {
-						future.complete(java.util.List.copyOf(server.getPlayerList().getPlayers()));
-					});
-					
-					var safePlayers = future.get();
-
-					if (!safePlayers.isEmpty()) {
-						debugLog("Cluster: Refreshing presence for {} online players...", safePlayers.size());
-						for (var player : safePlayers) {
-							PlayerPresenceManager.join(player, true);
-						}
-					}
-				} catch (InterruptedException e) {
-					break;
-				} catch (Exception e) {
-					LOGGER.error("Cluster: Error in presence heartbeat", e);
-				}
-			}
-		}, "NATS-Presence-Heartbeat");
-		heartbeat.setDaemon(true);
-		heartbeat.start();
 	}
 }
