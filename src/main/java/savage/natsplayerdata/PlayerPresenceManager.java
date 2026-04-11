@@ -77,9 +77,28 @@ public class PlayerPresenceManager {
             bucket.create(uuid.toString(), value.getBytes(java.nio.charset.StandardCharsets.UTF_8));
             return true;
         } catch (io.nats.client.JetStreamApiException e) {
-            // NATS Error Code 10071 is "wrong last sequence", meaning it already exists
-            return false; 
+            // NATS Error Code 10071 is "wrong last sequence", meaning key already exists
+            return false;
         } catch (Exception e) {
+            // 503 "No Responders" means our bucket handle is stale after a NATS reconnect.
+            // Reinitialize and retry once before giving up.
+            if (e.getMessage() != null && e.getMessage().contains("503")) {
+                NATSPlayerDataBridge.LOGGER.warn("Presence: Stale bucket handle detected (503), reinitializing and retrying lock for {}...", uuid);
+                PlayerStorage.getInstance().reinit();
+                try {
+                    var freshBucket = PlayerStorage.getInstance().getPresenceBucket();
+                    if (freshBucket == null) return false;
+                    String value = name + "|" + serverId;
+                    freshBucket.create(uuid.toString(), value.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+                    NATSPlayerDataBridge.LOGGER.info("Presence: Lock acquired on retry for {}.", uuid);
+                    return true;
+                } catch (io.nats.client.JetStreamApiException ex) {
+                    return false;
+                } catch (Exception ex) {
+                    NATSPlayerDataBridge.LOGGER.error("Presence: Lock retry also failed for {}: {}", uuid, ex.getMessage());
+                    return false;
+                }
+            }
             NATSPlayerDataBridge.LOGGER.error("Presence: Lock error for {}: {}", uuid, e.getMessage());
             return false;
         }

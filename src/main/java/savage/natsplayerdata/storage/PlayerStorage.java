@@ -34,8 +34,27 @@ public class PlayerStorage {
         return Holder.INSTANCE;
     }
 
+    /**
+     * Returns the presence bucket, lazily reinitializing if the NATS connection has recovered
+     * after an outage (stale handle detection).
+     */
     public KeyValue getPresenceBucket() {
+        if (presenceBucket == null && savage.natsfabric.NatsManager.getInstance().isConnected()) {
+            NATSPlayerDataBridge.LOGGER.info("Cluster: Presence bucket is null but NATS is live — reinitializing...");
+            reinit();
+        }
         return presenceBucket;
+    }
+
+    /**
+     * Re-initializes bucket handles after a NATS reconnect.
+     */
+    public void reinit() {
+        NATSPlayerDataBridge.LOGGER.info("Cluster: Reinitializing bucket handles after reconnect...");
+        kvBucket = null;
+        presenceBucket = null;
+        init();
+        NATSPlayerDataBridge.LOGGER.info("Cluster: Bucket handles re-established.");
     }
 
     private void init() {
