@@ -42,3 +42,4 @@ replay_*.log
 *.jfr
 MEMORY_SYNC_PLAN.md
 nbt_structure.md
+events.txt

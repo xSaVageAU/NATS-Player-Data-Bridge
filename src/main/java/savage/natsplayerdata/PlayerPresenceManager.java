@@ -90,7 +90,15 @@ public class PlayerPresenceManager {
      */
     public static void leave(ServerPlayer player) {
         UUID uuid = player.getUUID();
-        NATSPlayerDataBridge.debugLog("Presence: Player {} ({}) disconnected", player.getName().getString(), uuid);
+        
+        String owner = getLastKnownServer(uuid);
+        String localServerId = NatsManager.getInstance().getServerName();
+        if (owner != null && !owner.equals(localServerId)) {
+            NATSPlayerDataBridge.debugLog("Presence: Ignoring disconnect for {} ({}) - we don't own the lock", player.getName().getString(), uuid);
+            return;
+        }
+
+        NATSPlayerDataBridge.debugLog("Presence: Player {} ({}) disconnected, clearing lock", player.getName().getString(), uuid);
         PlayerStorage.getInstance().clearPresence(uuid);
     }
 
