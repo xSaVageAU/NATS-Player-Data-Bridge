@@ -9,6 +9,8 @@ import org.apache.commons.io.FileUtils;
 import savage.natsplayerdata.config.BridgeConfig;
 import savage.natsplayerdata.model.PlayerDataBundle;
 import savage.natsplayerdata.storage.PlayerStorage;
+import savage.natsplayerdata.util.LocalDiskIO;
+import savage.natsplayerdata.util.NbtFilterUtil;
 
 import java.io.ByteArrayOutputStream;
 import java.io.File;
@@ -78,7 +80,7 @@ public class PlayerDataManager {
             CompoundTag nbt = output.buildResult();
 
             // 2. Filter NBT based on Config
-            filterNbt(nbt);
+            NbtFilterUtil.filterNbt(nbt);
             
             // Write RAW NBT to bundle (Zstd will compress this much better than Gzip inside Gzip)
             ByteArrayOutputStream bos = new ByteArrayOutputStream();
@@ -90,12 +92,12 @@ public class PlayerDataManager {
             Map<String, Object> advMap = Collections.emptyMap();
 
             if (config == null || config.syncStats) {
-                String statsJson = readText(server.getWorldPath(LevelResource.PLAYER_STATS_DIR).resolve(uuid + ".json"));
+                String statsJson = LocalDiskIO.readText(server.getWorldPath(LevelResource.PLAYER_STATS_DIR).resolve(uuid + ".json"));
                 statsMap = JSON_MAPPER.readValue(statsJson, Map.class);
             }
 
             if (config == null || config.syncAdvancements) {
-                String advJson = readText(server.getWorldPath(LevelResource.PLAYER_ADVANCEMENTS_DIR).resolve(uuid + ".json"));
+                String advJson = LocalDiskIO.readText(server.getWorldPath(LevelResource.PLAYER_ADVANCEMENTS_DIR).resolve(uuid + ".json"));
                 advMap = JSON_MAPPER.readValue(advJson, Map.class);
             }
 
@@ -109,32 +111,6 @@ public class PlayerDataManager {
             PlayerStorage.getInstance().pushBundle(bundle);
         } catch (Exception e) {
             NATSPlayerDataBridge.LOGGER.error("Sync Error: Failed to pack bundle for {}: {}", player.getName().getString(), e.getMessage());
-        }
-    }
-
-    /**
-     * Filters the CompoundTag based on the BridgeConfig.
-     */
-    private static void filterNbt(CompoundTag tag) {
-        BridgeConfig config = NATSPlayerDataBridge.getConfig();
-        if (config == null || config.filterKeys == null || config.filterKeys.isEmpty()) return;
-
-        boolean isWhitelist = "whitelist".equalsIgnoreCase(config.filterMode);
-
-        if (isWhitelist) {
-            // Whitelist Mode: sync ONLY keys in filterKeys
-            Set<String> whitelist = new HashSet<>(config.filterKeys);
-            Set<String> keys = new HashSet<>(tag.keySet());
-            for (String key : keys) {
-                if (!whitelist.contains(key)) {
-                    tag.remove(key);
-                }
-            }
-        } else {
-            // Blacklist Mode: sync everything except keys in filterKeys
-            for (String key : config.filterKeys) {
-                tag.remove(key);
-            }
         }
     }
 
@@ -180,7 +156,7 @@ public class PlayerDataManager {
             CompoundTag natsTag = NbtIo.read(new java.io.DataInputStream(bis), net.minecraft.nbt.NbtAccounter.unlimitedHeap());
             
             // 2. Load the current local base data from disk
-            CompoundTag finalTag = readLocalNbt(uuid, server);
+            CompoundTag finalTag = LocalDiskIO.readLocalNbt(uuid, server);
             
             // 3. Merge: Synced NATS keys overwrite local data
             for (String key : natsTag.keySet()) {
@@ -217,15 +193,15 @@ public class PlayerDataManager {
             // 5. Write combined GZIPPED NBT back to disk (Vanilla compatibility)
             ByteArrayOutputStream bos = new ByteArrayOutputStream();
             NbtIo.writeCompressed(finalTag, bos);
-            writeBinary(server.getWorldPath(LevelResource.PLAYER_DATA_DIR).resolve(uuid + ".dat"), bos.toByteArray());
+            LocalDiskIO.writeBinary(server.getWorldPath(LevelResource.PLAYER_DATA_DIR).resolve(uuid + ".dat"), bos.toByteArray());
 
             // 6. Write Stats and Advancements only if enabled AND data was actually synced
             if ((config == null || config.syncStats) && !bundle.stats().isEmpty()) {
-                writeText(server.getWorldPath(LevelResource.PLAYER_STATS_DIR).resolve(uuid + ".json"), JSON_MAPPER.writeValueAsString(bundle.stats()));
+                LocalDiskIO.writeText(server.getWorldPath(LevelResource.PLAYER_STATS_DIR).resolve(uuid + ".json"), JSON_MAPPER.writeValueAsString(bundle.stats()));
             }
             
             if ((config == null || config.syncAdvancements) && !bundle.advancements().isEmpty()) {
-                writeText(server.getWorldPath(LevelResource.PLAYER_ADVANCEMENTS_DIR).resolve(uuid + ".json"), JSON_MAPPER.writeValueAsString(bundle.advancements()));
+                LocalDiskIO.writeText(server.getWorldPath(LevelResource.PLAYER_ADVANCEMENTS_DIR).resolve(uuid + ".json"), JSON_MAPPER.writeValueAsString(bundle.advancements()));
             }
             
             NATSPlayerDataBridge.debugLog("Cluster: Applied NATS bundle merge for {}", uuid);
@@ -237,40 +213,4 @@ public class PlayerDataManager {
         }
     }
 
-    /**
-     * Reads the current local player NBT from disk if it exists.
-     */
-    private static CompoundTag readLocalNbt(UUID uuid, MinecraftServer server) {
-        Path path = server.getWorldPath(LevelResource.PLAYER_DATA_DIR).resolve(uuid + ".dat");
-        File file = path.toFile();
-        if (!file.exists()) return new CompoundTag();
-        
-        try (java.io.FileInputStream fis = new java.io.FileInputStream(file)) {
-            return NbtIo.readCompressed(fis, net.minecraft.nbt.NbtAccounter.unlimitedHeap());
-        } catch (Exception e) {
-            NATSPlayerDataBridge.debugLog("Sync: No valid local NBT found for {} (New player?), starting fresh.", uuid);
-            return new CompoundTag();
-        }
-    }
-
-    // --- File Utils ---
-
-    private static String readText(Path path) throws IOException {
-        File file = path.toFile();
-        if (!file.exists()) return "{}";
-        
-        String content = FileUtils.readFileToString(file, StandardCharsets.UTF_8);
-
-        return content.isBlank() ? "{}" : content;
-    }
-
-    private static void writeBinary(Path path, byte[] data) throws IOException {
-        if (data == null || data.length == 0) return;
-        FileUtils.writeByteArrayToFile(path.toFile(), data);
-    }
-
-    private static void writeText(Path path, String data) throws IOException {
-        if (data == null || data.isEmpty() || data.equals("{}")) return;
-        FileUtils.writeStringToFile(path.toFile(), data, StandardCharsets.UTF_8);
-    }
 }
