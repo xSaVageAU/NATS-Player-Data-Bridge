@@ -50,9 +50,10 @@ public class PlayerDataManager {
 
     /**
      * Packs local world files into a NATS-ready CBOR bundle.
+     * @param markClean If true, marks the session as CLEAN in NATS.
      */
     @SuppressWarnings("unchecked")
-    public static void prepareAndPush(ServerPlayer player, MinecraftServer server) {
+    public static void prepareAndPush(ServerPlayer player, MinecraftServer server, boolean markClean) {
         UUID uuid = player.getUUID();
         BridgeConfig config = NATSPlayerDataBridge.getConfig();
         
@@ -104,6 +105,10 @@ public class PlayerDataManager {
             );
 
             PlayerStorage.getInstance().pushBundle(bundle);
+            
+            if (markClean) {
+                setSessionState(uuid, savage.natsplayerdata.model.PlayerState.CLEAN);
+            }
         } catch (Exception e) {
             NATSPlayerDataBridge.LOGGER.error("Sync Error: Failed to pack bundle for {}: {}", player.getName().getString(), e.getMessage());
         }
@@ -208,4 +213,21 @@ public class PlayerDataManager {
         }
     }
 
+    /**
+     * Updates the persistent session state for a player in the NATS cluster.
+     */
+    public static void setSessionState(UUID uuid, savage.natsplayerdata.model.PlayerState state) {
+        String serverId = savage.natsfabric.NatsManager.getInstance().getServerName();
+        var session = savage.natsplayerdata.model.SessionState.create(uuid, state, serverId);
+        PlayerStorage.getInstance().pushSession(session);
+    }
+
+    /**
+     * Clears a pending fetch from the cache. Should be called after the player joins or login fails.
+     */
+    public static void consumePendingFetch(UUID uuid) {
+        if (PENDING_FETCHES.remove(uuid) != null) {
+            NATSPlayerDataBridge.debugLog("Cluster: Consumed and cleared pending fetch for {}", uuid);
+        }
+    }
 }

@@ -17,6 +17,7 @@ import java.util.UUID;
  */
 public class PlayerStorage {
 
+    private static final ObjectMapper JSON_MAPPER = new ObjectMapper();
     private static final ObjectMapper CBOR_MAPPER = new ObjectMapper(new CBORFactory());
 
     private KeyValue kvBucket;
@@ -195,7 +196,7 @@ public class PlayerStorage {
             byte[] compressedBinary = CompressionUtil.compress(cborBinary);
             double compressMs = (System.nanoTime() - startNanos) / 1_000_000.0;
             
-            kvBucket.put(bundle.uuid().toString(), compressedBinary);
+            kvBucket.put("bundle." + bundle.uuid().toString(), compressedBinary);
             NATSPlayerDataBridge.debugLog("Cluster: Pushed {} bytes (Zstd compressed from {} bytes in {}ms) bundle for {}", compressedBinary.length, cborBinary.length, String.format("%.2f", compressMs), bundle.uuid());
         } catch (Exception e) {
             NATSPlayerDataBridge.LOGGER.error("Failed to push CBOR bundle: {}", e.getMessage());
@@ -208,7 +209,7 @@ public class PlayerStorage {
     public Optional<PlayerDataBundle> fetchBundle(UUID uuid) {
         if (kvBucket == null) return Optional.empty();
         try {
-            KeyValueEntry entry = kvBucket.get(uuid.toString());
+            KeyValueEntry entry = kvBucket.get("bundle." + uuid.toString());
             if (entry == null || entry.getValue() == null) return Optional.empty();
 
             byte[] compressedBinary = entry.getValue();
@@ -235,5 +236,34 @@ public class PlayerStorage {
      */
     public java.util.concurrent.CompletableFuture<Optional<PlayerDataBundle>> fetchBundleAsync(UUID uuid) {
         return java.util.concurrent.CompletableFuture.supplyAsync(() -> fetchBundle(uuid));
+    }
+
+    /**
+     * Pushes a player's session state (DIRTY/CLEAN) to the cluster.
+     */
+    public void pushSession(savage.natsplayerdata.model.SessionState state) {
+        if (kvBucket == null) return;
+        try {
+            byte[] json = JSON_MAPPER.writeValueAsBytes(state);
+            kvBucket.put("session." + state.uuid().toString(), json);
+            NATSPlayerDataBridge.debugLog("Cluster: Pushed session state {} for {}", state.state(), state.uuid());
+        } catch (Exception e) {
+            NATSPlayerDataBridge.LOGGER.error("Failed to push session state for {}: {}", state.uuid(), e.getMessage());
+        }
+    }
+
+    /**
+     * Fetches a player's current session state from the cluster.
+     */
+    public Optional<savage.natsplayerdata.model.SessionState> fetchSession(UUID uuid) {
+        if (kvBucket == null) return Optional.empty();
+        try {
+            KeyValueEntry entry = kvBucket.get("session." + uuid.toString());
+            if (entry == null || entry.getValue() == null) return Optional.empty();
+            return Optional.of(JSON_MAPPER.readValue(entry.getValue(), savage.natsplayerdata.model.SessionState.class));
+        } catch (Exception e) {
+            NATSPlayerDataBridge.LOGGER.error("Failed to fetch session state for {}: {}", uuid, e.getMessage());
+            return Optional.empty();
+        }
     }
 }

@@ -35,22 +35,25 @@ public class BridgeEvents {
 
         // Register Join Event (Set Presence)
         ServerPlayConnectionEvents.JOIN.register((handler, sender, server) -> {
-            NATSPlayerDataBridge.debugLog("Event: Player joined {}, setting presence...", handler.getPlayer().getName().getString());
-            boolean locked = PlayerPresenceManager.join(handler.getPlayer(), false); // Initial Lock
+            java.util.UUID uuid = handler.getPlayer().getUUID();
+            NATSPlayerDataBridge.debugLog("Event: Player joined {}, marking session as DIRTY...", handler.getPlayer().getName().getString());
             
-            // Failsafe: If they somehow got past the canPlayerLogin check, disconnect them now.
+            // Mark session as DIRTY baseline
+            PlayerDataManager.setSessionState(uuid, savage.natsplayerdata.model.PlayerState.DIRTY);
+
+            boolean locked = PlayerPresenceManager.join(handler.getPlayer(), false); // Keep ephemeral presence for now
             if (!locked) {
                 NATSPlayerDataBridge.LOGGER.error("Event: CRITICAL LOCK FAILURE for {} - disconnecting.", handler.getPlayer().getName().getString());
-                handler.disconnect(Component.literal("§cCluster lock acquisition failed.\n§7You may already be online on another server."));
+                handler.disconnect(Component.literal("§cCluster lock acquisition failed."));
                 return;
             }
         });
 
         // Register Disconnect Event (Clear Presence & Save Bundle)
         ServerPlayConnectionEvents.DISCONNECT.register((handler, server) -> {
-            NATSPlayerDataBridge.debugLog("Event: Player disconnected {}, clearing presence and packing data bundle...", handler.getPlayer().getName().getString());
+            NATSPlayerDataBridge.debugLog("Event: Player disconnected {}, saving data and marking session as CLEAN...", handler.getPlayer().getName().getString());
             PlayerPresenceManager.leave(handler.getPlayer());
-            server.execute(() -> PlayerDataManager.prepareAndPush(handler.getPlayer(), server));
+            server.execute(() -> PlayerDataManager.prepareAndPush(handler.getPlayer(), server, true)); // Mark Clean
         });
 
         // Periodic Cluster Checkpoints (Auto-save hook)
@@ -59,7 +62,7 @@ public class BridgeEvents {
             if (!players.isEmpty()) {
                 NATSPlayerDataBridge.debugLog("Cluster: Auto-save detected, pushing checkpoints for {} players...", players.size());
                 for (var player : players) {
-                    PlayerDataManager.prepareAndPush(player, server);
+                    PlayerDataManager.prepareAndPush(player, server, false); // Keep Dirty
                 }
             }
         });

@@ -18,7 +18,7 @@ public class BridgeCommands {
                     .requires(src -> src.permissions().hasPermission(net.minecraft.server.permissions.Permissions.COMMANDS_ADMIN))
                     .executes(ctx -> {
                         var player = ctx.getSource().getPlayerOrException();
-                        PlayerDataManager.prepareAndPush(player, ctx.getSource().getServer());
+                        PlayerDataManager.prepareAndPush(player, ctx.getSource().getServer(), false); // Still online
                         ctx.getSource().sendSuccess(() -> Component.literal("§aCluster bundle successfully pushed for " + player.getName().getString()), true);
                         return 1;
                     }))

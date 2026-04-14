@@ -44,6 +44,10 @@ public class NATSPlayerDataBridge implements ModInitializer {
 		});
 
 		ServerLifecycleEvents.SERVER_STOPPING.register(server -> {
+			LOGGER.info("NATS Bridge: Server stopping, draining player data pushes...");
+			for (var player : server.getPlayerList().getPlayers()) {
+				PlayerDataManager.prepareAndPush(player, server, true); // Mark Clean
+			}
 			SERVER = null;
 		});
 

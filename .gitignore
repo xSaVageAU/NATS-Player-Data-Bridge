@@ -43,3 +43,6 @@ replay_*.log
 MEMORY_SYNC_PLAN.md
 nbt_structure.md
 events.txt
+ADR-50.md
+DISASTER_RECOVERY_SPEC.md
+login-sequence-pull.txt
