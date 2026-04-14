@@ -57,14 +57,6 @@ public class PlayerDataManager {
         UUID uuid = player.getUUID();
         BridgeConfig config = NATSPlayerDataBridge.getConfig();
         
-        // SESSION LOCK: Only push if we own the lock or no one does
-        String owner = PlayerPresenceManager.getLastKnownServer(uuid);
-        String localServerId = savage.natsfabric.NatsManager.getInstance().getServerName();
-        if (owner != null && !owner.equals(localServerId)) {
-            NATSPlayerDataBridge.LOGGER.warn("Sync: Refusing to PUSH data for {} - session locked by server '{}'", player.getName().getString(), owner);
-            return;
-        }
-
         try {
             // Save stats and advancements to disk before reading
             server.getPlayerList().getPlayerStats(player).save();
@@ -120,14 +112,6 @@ public class PlayerDataManager {
     public static java.util.Optional<CompoundTag> fetchAndApply(UUID uuid, MinecraftServer server) {
         BridgeConfig config = NATSPlayerDataBridge.getConfig();
         
-        // SESSION LOCK: Only pull if we are the ones joining (no lock owner yet)
-        String owner = PlayerPresenceManager.getLastKnownServer(uuid);
-        String localServerId = savage.natsfabric.NatsManager.getInstance().getServerName();
-        if (owner != null && !owner.equals(localServerId)) {
-            NATSPlayerDataBridge.LOGGER.error("Sync: Refusing to PULL data for {} - session locked by server '{}'", uuid, owner);
-            return java.util.Optional.empty();
-        }
-
         // Check for pending async fetch
         CompletableFuture<Optional<PlayerDataBundle>> future = PENDING_FETCHES.remove(uuid);
         Optional<PlayerDataBundle> bundleOpt;

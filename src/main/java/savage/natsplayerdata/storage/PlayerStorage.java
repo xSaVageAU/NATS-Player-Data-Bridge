@@ -21,7 +21,6 @@ public class PlayerStorage {
     private static final ObjectMapper CBOR_MAPPER = new ObjectMapper(new CBORFactory());
 
     private KeyValue kvBucket;
-    private KeyValue presenceBucket;
 
     private static final class Holder {
         private static final PlayerStorage INSTANCE = new PlayerStorage();
@@ -36,24 +35,11 @@ public class PlayerStorage {
     }
 
     /**
-     * Returns the presence bucket, lazily reinitializing if the NATS connection has recovered
-     * after an outage (stale handle detection).
-     */
-    public KeyValue getPresenceBucket() {
-        if (presenceBucket == null && savage.natsfabric.NatsManager.getInstance().isConnected()) {
-            NATSPlayerDataBridge.LOGGER.info("Cluster: Presence bucket is null but NATS is live — reinitializing...");
-            reinit();
-        }
-        return presenceBucket;
-    }
-
-    /**
      * Re-initializes bucket handles after a NATS reconnect.
      */
     public void reinit() {
         NATSPlayerDataBridge.LOGGER.info("Cluster: Reinitializing bucket handles after reconnect...");
         kvBucket = null;
-        presenceBucket = null;
         init();
         NATSPlayerDataBridge.LOGGER.info("Cluster: Bucket handles re-established.");
     }
@@ -61,8 +47,6 @@ public class PlayerStorage {
     private void init() {
         String dataBucketName = NATSPlayerDataBridge.getConfig() != null && NATSPlayerDataBridge.getConfig().dataBucketName != null 
                 ? NATSPlayerDataBridge.getConfig().dataBucketName : "player-sync-v1";
-        String presenceBucketName = NATSPlayerDataBridge.getConfig() != null && NATSPlayerDataBridge.getConfig().presenceBucketName != null 
-                ? NATSPlayerDataBridge.getConfig().presenceBucketName : "player-presence-v1";
 
         try {
             var conn = NatsManager.getInstance().getConnection();
@@ -89,98 +73,19 @@ public class PlayerStorage {
             if (kvBucket == null) {
                 NATSPlayerDataBridge.LOGGER.error("Synchronizer: Bucket '{}' not available!", dataBucketName);
             }
-            
-            // Presence bucket with 60s TTL
-            try {
-                io.nats.client.KeyValueManagement kvm = conn.keyValueManagement();
-                boolean create = false;
-                try {
-                    io.nats.client.api.KeyValueStatus status = kvm.getStatus(presenceBucketName);
-                    // Check if it's currently persistent or has no TTL
-                    if (status.getConfiguration().getStorageType() != io.nats.client.api.StorageType.Memory || status.getConfiguration().getTtl().toSeconds() != 60) {
-                        NATSPlayerDataBridge.LOGGER.warn("Cluster: Presence bucket exists with wrong config (Storage: {}, TTL: {}s). Recreating...", 
-                            status.getConfiguration().getStorageType(), status.getConfiguration().getTtl().toSeconds());
-                        kvm.delete(presenceBucketName);
-                        create = true;
-                    }
-                } catch (Exception e) {
-                    // Doesn't exist
-                    create = true;
-                }
-
-                if (create) {
-                    kvm.create(io.nats.client.api.KeyValueConfiguration.builder()
-                        .name(presenceBucketName)
-                        .ttl(java.time.Duration.ofSeconds(60))
-                        .storageType(io.nats.client.api.StorageType.Memory)
-                        .build());
-                }
-                presenceBucket = conn.keyValue(presenceBucketName);
-            } catch (Exception e) {
-                NATSPlayerDataBridge.LOGGER.error("Cluster: Failed to setup ephemeral presence bucket: {}", e.getMessage());
-            }
-
-            if (presenceBucket == null) {
-                NATSPlayerDataBridge.LOGGER.warn("Synchronizer: Presence bucket '{}' not available!", presenceBucketName);
-            } else {
-                startPresenceWatcher();
-            }
         } catch (Exception e) {
             NATSPlayerDataBridge.LOGGER.error("Failed to initialize NATS KV storage: {}", e.getMessage());
         }
     }
 
     /**
-     * Starts a watcher on the presence bucket to maintain a local in-memory cache.
+     * Checks if the storage system is reachable.
      */
-    private void startPresenceWatcher() {
+    public boolean isStorageAvailable() {
         try {
-            if (presenceBucket != null) {
-                presenceBucket.watchAll(new savage.natsplayerdata.tasks.PresenceWatcherTask());
-            }
-        } catch (Exception e) {
-            NATSPlayerDataBridge.LOGGER.error("Cluster: Failed to start presence watcher: {}", e.getMessage());
-        }
-    }
-
-    /**
-     * Checks if the presence system is reachable.
-     */
-    public boolean isPresenceAvailable() {
-        try {
-            return presenceBucket != null && NatsManager.getInstance().isConnected();
+            return kvBucket != null && NatsManager.getInstance().isConnected();
         } catch (Exception e) {
             return false;
-        }
-    }
-
-
-    /**
-     * Clears a player's presence from the cluster.
-     */
-    public void clearPresence(UUID uuid) {
-        if (presenceBucket == null) return;
-        try {
-            presenceBucket.delete(uuid.toString());
-        } catch (Exception e) {
-            NATSPlayerDataBridge.LOGGER.error("Failed to clear presence for {}: {}", uuid, e.getMessage());
-        }
-    }
-
-    /**
-     * Purges all presence records from the cluster.
-     * To be called by the reset initiator.
-     */
-    public void purgeAllPresence() {
-        if (presenceBucket == null) return;
-        try {
-            java.util.List<String> keys = presenceBucket.keys();
-            for (String key : keys) {
-                presenceBucket.delete(key);
-            }
-            NATSPlayerDataBridge.debugLog("Cluster: Presence bucket purged.");
-        } catch (Exception e) {
-            NATSPlayerDataBridge.LOGGER.error("Failed to purge presence bucket: {}", e.getMessage());
         }
     }
 
