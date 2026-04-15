@@ -58,6 +58,18 @@ public class PlayerDataManager {
         BridgeConfig config = NATSPlayerDataBridge.getConfig();
         
         try {
+            // SESSION LOCK: STRICT PUSH GUARD
+            Optional<savage.natsplayerdata.model.SessionState> sessionOpt = PlayerStorage.getInstance().fetchSession(uuid);
+            String localServerId = savage.natsfabric.NatsManager.getInstance().getServerName();
+            if (sessionOpt.isPresent()) {
+                var session = sessionOpt.get();
+                if (session.state() != savage.natsplayerdata.model.PlayerState.DIRTY || !localServerId.equals(session.lastServer())) {
+                    // CATASTROPHIC FAILURE: Tried to push data for a player we DO NOT have locked.
+                    throw new RuntimeException("CATASTROPHIC DATA SAFETY FAULT: Attempted to push data for " + player.getName().getString() + " but session lock is either CLEAN or owned by another server: " + session.lastServer());
+                }
+            } else {
+                throw new RuntimeException("CATASTROPHIC DATA SAFETY FAULT: Attempted to push data for " + player.getName().getString() + " but NO lock exists! (Orphaned session)");
+            }
             // Save stats and advancements to disk before reading
             server.getPlayerList().getPlayerStats(player).save();
             server.getPlayerList().getPlayerAdvancements(player).save();
@@ -112,6 +124,22 @@ public class PlayerDataManager {
     public static java.util.Optional<CompoundTag> fetchAndApply(UUID uuid, MinecraftServer server) {
         BridgeConfig config = NATSPlayerDataBridge.getConfig();
         
+        // SESSION LOCK: STRICT PULL GUARD
+        Optional<savage.natsplayerdata.model.SessionState> sessionOpt = PlayerStorage.getInstance().fetchSession(uuid);
+        String localServerId = savage.natsfabric.NatsManager.getInstance().getServerName();
+        if (sessionOpt.isPresent()) {
+            var session = sessionOpt.get();
+            // Data should ALWAYS be marked DIRTY by the time we pull, because QUERY_START explicitly sets it.
+            // If it's not locked by US right now, something is deeply wrong.
+            if (session.state() != savage.natsplayerdata.model.PlayerState.DIRTY || !localServerId.equals(session.lastServer())) {
+                boolean unlockAttempt = PENDING_FETCHES.remove(uuid) != null; // Clear the pending task to prevent memory leaks
+                throw new RuntimeException("CATASTROPHIC DATA SAFETY FAULT: Attempted to pull data for " + uuid + " without explicit local lock acquisition! Lock owned by: " + session.lastServer());
+            }
+        } else {
+            // We should never reach here, QUERY_START guarantees a lock is set before the pull starts.
+             throw new RuntimeException("CATASTROPHIC DATA SAFETY FAULT: Attempted to pull data for " + uuid + " but NO lock exists!");
+        }
+
         // Check for pending async fetch
         CompletableFuture<Optional<PlayerDataBundle>> future = PENDING_FETCHES.remove(uuid);
         Optional<PlayerDataBundle> bundleOpt;
