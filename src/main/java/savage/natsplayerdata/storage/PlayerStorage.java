@@ -9,7 +9,6 @@ import savage.natsplayerdata.NATSPlayerDataBridge;
 import savage.natsplayerdata.model.PlayerDataBundle;
 import savage.natsplayerdata.util.CompressionUtil;
 
-import savage.natsplayerdata.model.SessionState;
 import java.util.Optional;
 import java.util.UUID;
 

@@ -1,9 +1,7 @@
 package savage.natsplayerdata.commands;
 
 import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback;
-import net.minecraft.commands.Commands;
 import net.minecraft.network.chat.Component;
-import savage.natsplayerdata.NATSPlayerDataBridge;
 import savage.natsplayerdata.PlayerDataManager;
 
 public class BridgeCommands {

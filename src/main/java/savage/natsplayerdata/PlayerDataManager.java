@@ -148,7 +148,7 @@ public class PlayerDataManager {
             // Data should ALWAYS be marked DIRTY by the time we pull, because QUERY_START explicitly sets it.
             // If it's not locked by US right now, something is deeply wrong.
             if (session.state() != savage.natsplayerdata.model.PlayerState.DIRTY || !localServerId.equals(session.lastServer())) {
-                boolean unlockAttempt = PENDING_FETCHES.remove(uuid) != null; // Clear the pending task to prevent memory leaks
+                PENDING_FETCHES.remove(uuid); // Clear the pending task to prevent memory leaks
                 throw new RuntimeException("CATASTROPHIC DATA SAFETY FAULT: Attempted to pull data for " + uuid + " without explicit local lock acquisition! Lock owned by: " + session.lastServer());
             }
         } else {
