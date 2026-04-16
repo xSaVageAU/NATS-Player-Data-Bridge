@@ -171,4 +171,42 @@ public class PlayerStorage {
             return Optional.empty();
         }
     }
+    /**
+     * Scans for any DIRTY sessions owned by the local server ID and resets them to CLEAN.
+     * This "self-heals" sessions that were left hanging after a server crash.
+     */
+    public void reconcileLocalSessions() {
+        if (kvBucket == null) return;
+        String localServerId = savage.natsfabric.NatsManager.getInstance().getServerName();
+        NATSPlayerDataBridge.LOGGER.info("Cluster: Starting session reconciliation for server '{}'...", localServerId);
+
+        try {
+            int fixedCount = 0;
+            // Iterate over all session keys
+            for (String key : kvBucket.keys("session.*")) {
+                try {
+                    KeyValueEntry entry = kvBucket.get(key);
+                    if (entry == null || entry.getValue() == null) continue;
+
+                    savage.natsplayerdata.model.SessionState session = JSON_MAPPER.readValue(entry.getValue(), savage.natsplayerdata.model.SessionState.class);
+                    
+                    // If it's DIRTY and belongs to US, it's an orphan from a crash.
+                    if (session.state() == savage.natsplayerdata.model.PlayerState.DIRTY && localServerId.equals(session.lastServer())) {
+                        NATSPlayerDataBridge.debugLog("Cluster: Healing orphaned session for {}", key);
+                        pushSession(savage.natsplayerdata.model.SessionState.create(session.uuid(), savage.natsplayerdata.model.PlayerState.CLEAN, localServerId));
+                        fixedCount++;
+                    }
+                } catch (Exception e) {
+                    NATSPlayerDataBridge.LOGGER.warn("Cluster: Failed to process session key '{}' during reconciliation: {}", key, e.getMessage());
+                }
+            }
+            if (fixedCount > 0) {
+                NATSPlayerDataBridge.LOGGER.info("Cluster: Successfully reconciled {} orphaned sessions.", fixedCount);
+            } else {
+                NATSPlayerDataBridge.debugLog("Cluster: No orphaned sessions found to reconcile.");
+            }
+        } catch (Exception e) {
+            NATSPlayerDataBridge.LOGGER.error("Cluster: Fatal error during session reconciliation: {}", e.getMessage());
+        }
+    }
 }

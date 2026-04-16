@@ -12,9 +12,8 @@ public class BridgeEvents {
 
     public static void register() {
         ServerLifecycleEvents.SERVER_STARTED.register(server -> {
-            NATSPlayerDataBridge.debugLog("NATS Bridge: Global server instance captured.");
-            // Initialize storage
-            PlayerStorage.getInstance();
+            // Initialize storage and self-heal crashed sessions
+            PlayerStorage.getInstance().reconcileLocalSessions();
         });
 
         // Join event just logs now, lock acquisition happens in QUERY_START
