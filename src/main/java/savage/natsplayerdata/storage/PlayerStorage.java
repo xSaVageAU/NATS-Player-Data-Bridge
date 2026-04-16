@@ -36,15 +36,8 @@ public class PlayerStorage {
     }
 
     /**
-     * Re-initializes bucket handles after a NATS reconnect.
+     * Initializes the connection to the NATS Key-Value bucket.
      */
-    public void reinit() {
-        NATSPlayerDataBridge.LOGGER.info("Cluster: Reinitializing bucket handles after reconnect...");
-        kvBucket = null;
-        init();
-        NATSPlayerDataBridge.LOGGER.info("Cluster: Bucket handles re-established.");
-    }
-
     private void init() {
         String dataBucketName = NATSPlayerDataBridge.getConfig() != null && NATSPlayerDataBridge.getConfig().dataBucketName != null 
                 ? NATSPlayerDataBridge.getConfig().dataBucketName : "player-sync-v1";
