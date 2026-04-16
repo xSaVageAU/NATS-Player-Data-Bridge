@@ -26,7 +26,20 @@ import java.util.concurrent.TimeUnit;
 public class PlayerDataManager {
 
     private static final Map<UUID, CompletableFuture<Optional<PlayerDataBundle>>> PENDING_FETCHES = new ConcurrentHashMap<>();
+    private static final java.util.Set<net.minecraft.server.network.ServerLoginPacketListenerImpl> ACTIVE_LOGIN_HANDLERS = java.util.Collections.newSetFromMap(new java.util.WeakHashMap<>());
     private static final com.fasterxml.jackson.databind.ObjectMapper JSON_MAPPER = new com.fasterxml.jackson.databind.ObjectMapper();
+
+    public static void markLoginHandlerActive(net.minecraft.server.network.ServerLoginPacketListenerImpl handler) {
+        ACTIVE_LOGIN_HANDLERS.add(handler);
+    }
+
+    public static boolean isLoginHandlerActive(net.minecraft.server.network.ServerLoginPacketListenerImpl handler) {
+        return ACTIVE_LOGIN_HANDLERS.contains(handler);
+    }
+
+    public static void clearLoginHandler(net.minecraft.server.network.ServerLoginPacketListenerImpl handler) {
+        ACTIVE_LOGIN_HANDLERS.remove(handler);
+    }
 
     /**
      * Starts an asynchronous fetch for player data from the cluster.
@@ -41,8 +54,11 @@ public class PlayerDataManager {
         
         // Cleanup after 30 seconds if never consumed
         future.orTimeout(30, TimeUnit.SECONDS).whenComplete((res, ex) -> {
-            // We don't remove here because we want fetchAndApply to find it. 
-            // The removal happens in fetchAndApply.
+            if (ex != null) {
+                if (PENDING_FETCHES.remove(uuid) != null) {
+                    NATSPlayerDataBridge.debugLog("Cluster: Pending fetch removed due to timeout/error for {}", uuid);
+                }
+            }
         });
         
         return future;
@@ -236,10 +252,13 @@ public class PlayerDataManager {
 
     /**
      * Clears a pending fetch from the cache. Should be called after the player joins or login fails.
+     * @return true if a pending fetch was actually removed
      */
-    public static void consumePendingFetch(UUID uuid) {
+    public static boolean consumePendingFetch(UUID uuid) {
         if (PENDING_FETCHES.remove(uuid) != null) {
             NATSPlayerDataBridge.debugLog("Cluster: Consumed and cleared pending fetch for {}", uuid);
+            return true;
         }
+        return false;
     }
 }
