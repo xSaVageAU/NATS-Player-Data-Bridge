@@ -59,10 +59,10 @@ public class PlayerDataManager {
         
         try {
             // SESSION LOCK: STRICT PUSH GUARD
-            Optional<savage.natsplayerdata.model.SessionState> sessionOpt = PlayerStorage.getInstance().fetchSession(uuid);
+            var entryOpt = PlayerStorage.getInstance().fetchSession(uuid);
             String localServerId = savage.natsfabric.NatsManager.getInstance().getServerName();
-            if (sessionOpt.isPresent()) {
-                var session = sessionOpt.get();
+            if (entryOpt.isPresent()) {
+                var session = entryOpt.get().state();
                 if (session.state() != savage.natsplayerdata.model.PlayerState.DIRTY || !localServerId.equals(session.lastServer())) {
                     // CATASTROPHIC FAILURE: Tried to push data for a player we DO NOT have locked.
                     throw new RuntimeException("CATASTROPHIC DATA SAFETY FAULT: Attempted to push data for " + player.getName().getString() + " but session lock is either CLEAN or owned by another server: " + session.lastServer());
@@ -125,10 +125,10 @@ public class PlayerDataManager {
         BridgeConfig config = NATSPlayerDataBridge.getConfig();
         
         // SESSION LOCK: STRICT PULL GUARD
-        Optional<savage.natsplayerdata.model.SessionState> sessionOpt = PlayerStorage.getInstance().fetchSession(uuid);
+        var entryOpt = PlayerStorage.getInstance().fetchSession(uuid);
         String localServerId = savage.natsfabric.NatsManager.getInstance().getServerName();
-        if (sessionOpt.isPresent()) {
-            var session = sessionOpt.get();
+        if (entryOpt.isPresent()) {
+            var session = entryOpt.get().state();
             // Data should ALWAYS be marked DIRTY by the time we pull, because QUERY_START explicitly sets it.
             // If it's not locked by US right now, something is deeply wrong.
             if (session.state() != savage.natsplayerdata.model.PlayerState.DIRTY || !localServerId.equals(session.lastServer())) {

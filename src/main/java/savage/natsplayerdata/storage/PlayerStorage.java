@@ -9,6 +9,7 @@ import savage.natsplayerdata.NATSPlayerDataBridge;
 import savage.natsplayerdata.model.PlayerDataBundle;
 import savage.natsplayerdata.util.CompressionUtil;
 
+import savage.natsplayerdata.model.SessionState;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -144,33 +145,64 @@ public class PlayerStorage {
     }
 
     /**
-     * Pushes a player's session state (DIRTY/CLEAN) to the cluster.
+     * Fetches a player's current session state along with its NATS revision (for CAS).
      */
-    public void pushSession(savage.natsplayerdata.model.SessionState state) {
-        if (kvBucket == null) return;
-        try {
-            byte[] json = JSON_MAPPER.writeValueAsBytes(state);
-            kvBucket.put("session." + state.uuid().toString(), json);
-            NATSPlayerDataBridge.debugLog("Cluster: Pushed session state {} for {}", state.state(), state.uuid());
-        } catch (Exception e) {
-            NATSPlayerDataBridge.LOGGER.error("Failed to push session state for {}: {}", state.uuid(), e.getMessage());
-        }
-    }
-
-    /**
-     * Fetches a player's current session state from the cluster.
-     */
-    public Optional<savage.natsplayerdata.model.SessionState> fetchSession(UUID uuid) {
+    public Optional<SessionEntry> fetchSession(UUID uuid) {
         if (kvBucket == null) return Optional.empty();
         try {
             KeyValueEntry entry = kvBucket.get("session." + uuid.toString());
             if (entry == null || entry.getValue() == null) return Optional.empty();
-            return Optional.of(JSON_MAPPER.readValue(entry.getValue(), savage.natsplayerdata.model.SessionState.class));
+            
+            savage.natsplayerdata.model.SessionState state = JSON_MAPPER.readValue(entry.getValue(), savage.natsplayerdata.model.SessionState.class);
+            return Optional.of(new SessionEntry(state, entry.getRevision()));
         } catch (Exception e) {
             NATSPlayerDataBridge.LOGGER.error("Failed to fetch session state for {}: {}", uuid, e.getMessage());
             return Optional.empty();
         }
     }
+
+    /**
+     * Pushes a player's session state. 
+     * If expectedRevision is > 0, it uses NATS Optimistic Concurrency (CAS).
+     * @return true if the update was successful, false if it failed (e.g. revision mismatch)
+     */
+    public boolean pushSession(savage.natsplayerdata.model.SessionState state, long expectedRevision) {
+        if (kvBucket == null) return false;
+        try {
+            byte[] json = JSON_MAPPER.writeValueAsBytes(state);
+            String key = "session." + state.uuid().toString();
+
+            if (expectedRevision > 0) {
+                // Atomic Update (Check-and-Set)
+                kvBucket.update(key, json, expectedRevision);
+            } else {
+                // Standard Put (Blind overwrite)
+                kvBucket.put(key, json);
+            }
+            
+            NATSPlayerDataBridge.debugLog("Cluster: Pushed session state {} (Rev: {}) for {}", state.state(), expectedRevision > 0 ? expectedRevision : "blind", state.uuid());
+            return true;
+        } catch (io.nats.client.JetStreamApiException e) {
+            if (e.getErrorCode() == 10071 || e.getMessage().contains("wrong last sequence")) {
+                NATSPlayerDataBridge.LOGGER.warn("Cluster: Atomic grab failed for {} (Someone else updated the lock first)", state.uuid());
+                return false;
+            }
+            throw new RuntimeException("NATS API Error", e);
+        } catch (Exception e) {
+            NATSPlayerDataBridge.LOGGER.error("Failed to push session state for {}: {}", state.uuid(), e.getMessage());
+            return false;
+        }
+    }
+
+    /** Helper for standard blind pushes */
+    public void pushSession(savage.natsplayerdata.model.SessionState state) {
+        pushSession(state, -1);
+    }
+
+    /**
+     * Data record to hold a session and its NATS revision.
+     */
+    public record SessionEntry(savage.natsplayerdata.model.SessionState state, long revision) {}
     /**
      * Scans for any DIRTY sessions owned by the local server ID and resets them to CLEAN.
      * This "self-heals" sessions that were left hanging after a server crash.

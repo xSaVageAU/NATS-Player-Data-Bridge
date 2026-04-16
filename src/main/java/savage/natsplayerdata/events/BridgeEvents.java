@@ -52,15 +52,17 @@ public class BridgeEvents {
             if (handler.authenticatedProfile != null) {
                 uuid = handler.authenticatedProfile.id();
             }
-
             if (uuid != null) {
-                // 1. STRICT LOCK CHECK
-                java.util.Optional<savage.natsplayerdata.model.SessionState> sessionOpt = PlayerStorage.getInstance().fetchSession(uuid);
+                // 1. ATOMIC LOCK CHECK
+                var entryOpt = PlayerStorage.getInstance().fetchSession(uuid);
                 String localServerId = savage.natsfabric.NatsManager.getInstance().getServerName();
 
-                boolean canAcquire = true;
-                if (sessionOpt.isPresent()) {
-                    var session = sessionOpt.get();
+                long expectedRevision = -1; // -1 means new key (blind put if not exists)
+                if (entryOpt.isPresent()) {
+                    var entry = entryOpt.get();
+                    var session = entry.state();
+                    expectedRevision = entry.revision();
+
                     if (session.state() == savage.natsplayerdata.model.PlayerState.DIRTY && !localServerId.equals(session.lastServer())) {
                         NATSPlayerDataBridge.LOGGER.error("Cluster: Rejecting login for {} - session is currently locked by '{}'", uuid, session.lastServer());
                         handler.disconnect(Component.literal("§cYour player data is currently locked by server: §b" + session.lastServer() + "\n§7Please wait a moment and try again."));
@@ -68,11 +70,17 @@ public class BridgeEvents {
                     }
                 }
 
-                if (canAcquire) {
-                    // 2. ACQUIRE LOCK (Set DIRTY)
-                    NATSPlayerDataBridge.debugLog("Cluster: Lock acquired for {}. Marking DIRTY.", uuid);
-                    PlayerDataManager.setSessionState(uuid, savage.natsplayerdata.model.PlayerState.DIRTY);
+                // 2. ATOMIC ACQUIRE LOCK (CAS)
+                var newState = savage.natsplayerdata.model.SessionState.create(uuid, savage.natsplayerdata.model.PlayerState.DIRTY, localServerId);
+                boolean success = PlayerStorage.getInstance().pushSession(newState, expectedRevision);
+
+                if (!success) {
+                    NATSPlayerDataBridge.LOGGER.error("Cluster: Atomic lock acquisition failed for {} - someone else grabbed it!", uuid);
+                    handler.disconnect(Component.literal("§cCluster sync error: Lock acquisition race detected.\n§7Please try logging in again."));
+                    return;
                 }
+
+                NATSPlayerDataBridge.debugLog("Cluster: Atomic lock acquired for {}. Marking DIRTY.", uuid);
 
                 // 3. All clear — hold the login until NATS finishes downloading the bundle.
                 java.util.concurrent.CompletableFuture<?> fetchFuture = PlayerDataManager.requestAsyncFetch(uuid);
