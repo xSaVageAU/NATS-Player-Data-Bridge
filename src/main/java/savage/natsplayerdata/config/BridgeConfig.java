@@ -44,9 +44,6 @@ public class BridgeConfig {
     /** The NATS KV bucket name for player data sync. */
     public String dataBucketName = "player-sync-v1";
 
-    /** The NATS KV bucket name for the ephemeral presence locks. */
-    public String presenceBucketName = "player-presence-v1";
-
     public BridgeConfig() {
         filterKeys.add("Inventory");
         filterKeys.add("EnderItems");
