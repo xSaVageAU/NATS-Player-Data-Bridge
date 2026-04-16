@@ -1,65 +1,49 @@
 # NATS Player Data Bridge
 
-A Fabric server-side mod that synchronizes player data across a cluster of Minecraft servers using [NATS](https://nats.io).
+A Fabric mod for Minecraft servers that synchronizes player data (inventories, stats, and advancements) across a cluster using the [NATS](https://nats.io) messaging system.
 
-When a player leaves one server, their data is packed into a compressed bundle and pushed to NATS. When they join another server in the cluster, that data is pulled and applied before Minecraft loads the player.
+## Overview
 
-## What it syncs
+This mod allows players to jump between different servers in a cluster while keeping their items and progress intact. When a player leaves a server, their data is saved to a NATS Key-Value bucket; when they join another server, that data is retrieved and applied before they spawn.
 
-- Player NBT (inventory, ender chest, XP, health, hunger, attributes, etc.)
-- Statistics
-- Advancements
+## Installation
 
-By default, inventory contents, ender chest, XP, hunger, and credits status are synced. This can be changed to a blacklist or a different whitelist in the config.
-
-## Duplicate login prevention
-
-Players are locked to one server at a time using an atomic presence lock in NATS. If a player tries to join a second server while already online, they are rejected. Presence keys auto-expire after 60 seconds to recover from crashes.
-
-## Data integrity protection
-
-If a NATS node goes offline, or data is corrupted/fails to decompress during a server transition, the bridge will immediately abort the login connection. This is designed to prevent Minecraft from loading stale local disk data and protect against inventory rollbacks.
-
-## Requirements
-
-- Minecraft 26.1+ (Fabric)
-- Java 25+
-- [NATS-Fabric](https://github.com/xSaVageAU/NATS-Fabric) library mod (installed separately)
-- A NATS server with JetStream enabled
-
-## Setup
-
-1. Install both `nats-fabric` and `nats-player-data-bridge` jars into your server's `mods/` folder.
-2. Start the server once to generate config files.
-3. Edit `config/nats-fabric.json` — set your NATS server URL and a unique `serverName` for each server.
-4. Edit `config/nats-player-data-bridge.json` to configure what data gets synced.
-5. Restart the server. Repeat for each server in the cluster.
-
-## Commands
-
-All commands require operator permissions.
-
-| Command | Description |
-|---|---|
-| `/nats sync` | Force-push your current player data to NATS |
-| `/nats online` | Show the local presence cache (diagnostic) |
-| `/nats online reset` | Purge all presence records and re-sync the cluster |
+1. Place the `nats-player-data-bridge` jar into the `mods/` folder of all servers in your cluster.
+2. Ensure the **[NATS-Fabric](https://github.com/xSaVageAU/NATS-Fabric)** library mod is also installed.
+3. Start each server once to generate the configuration files.
 
 ## Configuration
 
-`nats-player-data-bridge.json`:
+### 1. Connection settings (`config/nats-fabric.json`)
+You must configure the library mod first so the bridge can talk to your NATS server:
+- `natsUrl`: The address of your NATS server (e.g., `nats://127.0.0.1:4222`).
+- `serverName`: A unique name for this server instance (e.g., `survival-1`).
 
-| Field | Default | Description |
-|---|---|---|
-| `debug` | `false` | Enable verbose logging |
-| `syncStats` | `true` | Sync player statistics |
-| `syncAdvancements` | `true` | Sync player advancements |
-| `filterMode` | `"whitelist"` | `"blacklist"` or `"whitelist"` for NBT key filtering |
-| `filterKeys` | `["Inventory", "EnderItems", "SelectedItemSlot", "Health", "foodExhaustionLevel", "foodLevel", "foodSaturationLevel", "foodTickTimer", "seenCredits", "XpLevel", "XpP", "XpTotal", "active_effects", "AbsorptionAmount", "equipment"]` | NBT keys to filter |
-| `dataBucketName` | `"player-sync-v1"` | NATS KV bucket for player data storage |
-| `presenceBucketName` | `"player-presence-v1"` | NATS KV bucket for ephemeral presence locks |
+### 2. Bridge settings (`config/nats-player-data-bridge.json`)
+- `syncStats`: Enable/disable statistics synchronization.
+- `syncAdvancements`: Enable/disable advancement synchronization.
+- `filterKeys`: Choose which NBT tags (like `Inventory` or `EnderItems`) to sync or exclude.
 
-*Tip: If you run multiple isolated clusters (like a Dev and Prod network) on the same NATS server, simply change the bucket names here to keep their data separated.*
+## Commands
+
+All commands require operator (Level 4) permissions.
+
+| Command | Description |
+|---|---|
+| `/nats sync` | Manually push your current data to the cluster. |
+| `/nats force-clean <uuid>` | Manually reset a player's session lock if it becomes stuck. |
+
+---
+
+## Technical Details (Data Integrity)
+
+The bridge is designed with several safety layers to prevent common "split-brain" or data loss issues found in distributed Minecraft environments:
+
+- **Session Locking**: When a player joins, the server acquires a "Dirty" lock in NATS. While locked, no other server can load or save that player's data. This prevents duplicate items from being generated on multiple servers simultaneously.
+- **Atomic Acquisition (CAS)**: The bridge uses NATS optimistic concurrency to ensure that lock acquisition is atomic. If two servers try to claim a player at once, only one will succeed.
+- **Startup Reconciliation**: If a server crashes while players are online, their locks will remain "Dirty." When that server restarts, it automatically scans for any sessions it previously owned and resets them to "Clean" so players can log back in.
+- **Fail-to-Safety**: If NATS is unreachable or a session is locked by another server, the bridge will disconnect the player rather than letting them play with stale local data.
+- **Optimization**: Data is compressed using Zstd and serialized as CBOR to minimize network traffic and storage use.
 
 ## License
 
