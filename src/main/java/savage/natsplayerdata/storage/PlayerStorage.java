@@ -197,6 +197,30 @@ public class PlayerStorage {
      */
     public record SessionEntry(savage.natsplayerdata.model.SessionState state, long revision) {}
     /**
+     * Fetches all session entries currently stored in the cluster.
+     */
+    public java.util.List<SessionEntry> getAllSessions() {
+        java.util.List<SessionEntry> sessions = new java.util.ArrayList<>();
+        if (kvBucket == null) return sessions;
+
+        try {
+            for (String key : kvBucket.keys("session.*")) {
+                try {
+                    KeyValueEntry entry = kvBucket.get(key);
+                    if (entry == null || entry.getValue() == null) continue;
+                    savage.natsplayerdata.model.SessionState session = JSON_MAPPER.readValue(entry.getValue(), savage.natsplayerdata.model.SessionState.class);
+                    sessions.add(new SessionEntry(session, entry.getRevision()));
+                } catch (Exception e) {
+                    NATSPlayerDataBridge.LOGGER.warn("Cluster: Failed to read session key '{}': {}", key, e.getMessage());
+                }
+            }
+        } catch (Exception e) {
+            NATSPlayerDataBridge.LOGGER.error("Cluster: Failed to list session keys: {}", e.getMessage());
+        }
+        return sessions;
+    }
+
+    /**
      * Scans for any DIRTY sessions owned by the local server ID and resets them to CLEAN.
      * This "self-heals" sessions that were left hanging after a server crash.
      */
