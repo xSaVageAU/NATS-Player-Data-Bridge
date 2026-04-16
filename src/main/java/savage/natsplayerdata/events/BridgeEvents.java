@@ -53,7 +53,14 @@ public class BridgeEvents {
                 uuid = handler.authenticatedProfile.id();
             }
             if (uuid != null) {
-                // 1. ATOMIC LOCK CHECK
+                // --- 1. LOCAL REDUNDANCY CHECK ---
+                // If the player is already online locally, step aside. 
+                // The SameServerGuardMixin will handle the rejection.
+                if (server.getPlayerList().getPlayer(uuid) != null) {
+                    return;
+                }
+
+                // 2. ATOMIC LOCK CHECK
                 var entryOpt = PlayerStorage.getInstance().fetchSession(uuid);
                 String localServerId = savage.natsfabric.NatsManager.getInstance().getServerName();
 
