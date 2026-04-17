@@ -9,6 +9,8 @@ import savage.natsplayerdata.NATSPlayerDataBridge;
 import savage.natsplayerdata.model.PlayerDataBundle;
 import savage.natsplayerdata.util.CompressionUtil;
 
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -21,6 +23,7 @@ public class PlayerStorage {
     private static final ObjectMapper CBOR_MAPPER = new ObjectMapper(new CBORFactory());
 
     private KeyValue kvBucket;
+    private static final ExecutorService VIRTUAL_EXECUTOR = Executors.newVirtualThreadPerTaskExecutor();
 
     private static final class Holder {
         private static final PlayerStorage INSTANCE = new PlayerStorage();
@@ -133,7 +136,7 @@ public class PlayerStorage {
      * Fetches a player bundle asynchronously.
      */
     public java.util.concurrent.CompletableFuture<Optional<PlayerDataBundle>> fetchBundleAsync(UUID uuid) {
-        return java.util.concurrent.CompletableFuture.supplyAsync(() -> fetchBundle(uuid));
+        return java.util.concurrent.CompletableFuture.supplyAsync(() -> fetchBundle(uuid), VIRTUAL_EXECUTOR);
     }
 
     /**
