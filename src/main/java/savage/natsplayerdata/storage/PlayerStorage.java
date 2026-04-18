@@ -23,7 +23,7 @@ public class PlayerStorage {
     private static final ObjectMapper CBOR_MAPPER = new ObjectMapper(new CBORFactory());
 
     private KeyValue kvBucket;
-    private static final ExecutorService VIRTUAL_EXECUTOR = Executors.newVirtualThreadPerTaskExecutor();
+    public static final ExecutorService VIRTUAL_EXECUTOR = Executors.newVirtualThreadPerTaskExecutor();
 
     private static final class Holder {
         private static final PlayerStorage INSTANCE = new PlayerStorage();

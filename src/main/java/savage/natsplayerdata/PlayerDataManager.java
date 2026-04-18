@@ -68,70 +68,80 @@ public class PlayerDataManager {
      * Packs local world files into a NATS-ready CBOR bundle.
      * @param markClean If true, marks the session as CLEAN in NATS.
      */
-    @SuppressWarnings("unchecked")
     public static void prepareAndPush(ServerPlayer player, MinecraftServer server, boolean markClean) {
         UUID uuid = player.getUUID();
-        BridgeConfig config = NATSPlayerDataBridge.getConfig();
+        String playerName = player.getName().getString();
         
-        try {
-            // SESSION LOCK: STRICT PUSH GUARD
-            var entryOpt = PlayerStorage.getInstance().fetchSession(uuid);
-            String localServerId = savage.natsfabric.NatsManager.getInstance().getServerName();
-            if (entryOpt.isPresent()) {
-                var session = entryOpt.get().state();
-                if (session.state() != savage.natsplayerdata.model.PlayerState.DIRTY || !localServerId.equals(session.lastServer())) {
-                    // CATASTROPHIC FAILURE: Tried to push data for a player we DO NOT have locked.
-                    throw new RuntimeException("CATASTROPHIC DATA SAFETY FAULT: Attempted to push data for " + player.getName().getString() + " but session lock is either CLEAN or owned by another server: " + session.lastServer());
+        // 1. Capture LIVE NBT (MUST BE MAIN THREAD)
+        // We capture the raw NBT here so it's thread-safe.
+        net.minecraft.world.level.storage.TagValueOutput output = net.minecraft.world.level.storage.TagValueOutput.createWithContext(net.minecraft.util.ProblemReporter.DISCARDING, server.registryAccess());
+        player.saveWithoutId(output);
+        CompoundTag nbt = output.buildResult();
+
+        // 2. Capture Stats/Advancement saving (Triggers Vanilla disk writes)
+        server.getPlayerList().getPlayerStats(player).save();
+        server.getPlayerList().getPlayerAdvancements(player).save();
+
+        // 3. Offload the heavy lifting to a Virtual Thread
+        java.util.concurrent.CompletableFuture.runAsync(() -> {
+            BridgeConfig config = NATSPlayerDataBridge.getConfig();
+            try {
+                // SESSION LOCK: STRICT PUSH GUARD (Network I/O)
+                var entryOpt = PlayerStorage.getInstance().fetchSession(uuid);
+                String localServerId = savage.natsfabric.NatsManager.getInstance().getServerName();
+                
+                if (entryOpt.isPresent()) {
+                    var session = entryOpt.get().state();
+                    if (session.state() != savage.natsplayerdata.model.PlayerState.DIRTY || !localServerId.equals(session.lastServer())) {
+                        NATSPlayerDataBridge.LOGGER.error("CATASTROPHIC DATA SAFETY FAULT: Attempted to push data for {} but session lock is either CLEAN or owned by another server: {}", playerName, session.lastServer());
+                        return;
+                    }
+                } else {
+                    NATSPlayerDataBridge.LOGGER.error("CATASTROPHIC DATA SAFETY FAULT: Attempted to push data for {} but NO lock exists!", playerName);
+                    return;
                 }
-            } else {
-                throw new RuntimeException("CATASTROPHIC DATA SAFETY FAULT: Attempted to push data for " + player.getName().getString() + " but NO lock exists! (Orphaned session)");
+
+                // Filtering (Memory heavy)
+                NbtFilterUtil.filterNbt(nbt);
+                
+                // Serialize NBT to bytes
+                ByteArrayOutputStream bos = new ByteArrayOutputStream();
+                NbtIo.write(nbt, new java.io.DataOutputStream(bos));
+                byte[] nbtBytes = bos.toByteArray();
+
+                // Read Stats/Advancements from Disk (Disk I/O)
+                Map<String, Object> statsMap = Collections.emptyMap();
+                Map<String, Object> advMap = Collections.emptyMap();
+
+                if (config == null || config.syncStats) {
+                    java.nio.file.Path statsPath = server.getWorldPath(LevelResource.PLAYER_STATS_DIR).resolve(uuid + ".json");
+                    String statsJson = LocalDiskIO.readText(statsPath);
+                    statsMap = JSON_MAPPER.readValue(statsJson, Map.class);
+                }
+
+                if (config == null || config.syncAdvancements) {
+                    java.nio.file.Path advPath = server.getWorldPath(LevelResource.PLAYER_ADVANCEMENTS_DIR).resolve(uuid + ".json");
+                    String advJson = LocalDiskIO.readText(advPath);
+                    advMap = JSON_MAPPER.readValue(advJson, Map.class);
+                }
+
+                NATSPlayerDataBridge.debugLog("Sync: Packing bundle for {} [NBT: {}b, Stats: {} keys, Adv: {} keys]", 
+                    playerName, nbtBytes.length, statsMap.size(), advMap.size());
+
+                PlayerDataBundle bundle = new PlayerDataBundle(
+                    uuid, nbtBytes, statsMap, advMap, System.currentTimeMillis()
+                );
+
+                // Networking (NATS Push)
+                PlayerStorage.getInstance().pushBundle(bundle);
+                
+                if (markClean) {
+                    setSessionState(uuid, savage.natsplayerdata.model.PlayerState.CLEAN);
+                }
+            } catch (Exception e) {
+                NATSPlayerDataBridge.LOGGER.error("Async Sync Error: Failed to push bundle for {}: {}", playerName, e.getMessage());
             }
-            // Save stats and advancements to disk before reading
-            server.getPlayerList().getPlayerStats(player).save();
-            server.getPlayerList().getPlayerAdvancements(player).save();
-
-            // 1. Capture LIVE NBT (Inventory, EnderChest, Attributes, XP, etc.)
-            net.minecraft.world.level.storage.TagValueOutput output = net.minecraft.world.level.storage.TagValueOutput.createWithContext(net.minecraft.util.ProblemReporter.DISCARDING, server.registryAccess());
-            player.saveWithoutId(output);
-            CompoundTag nbt = output.buildResult();
-
-            // 2. Filter NBT based on Config
-            NbtFilterUtil.filterNbt(nbt);
-            
-            // Write RAW NBT to bundle (Zstd will compress this much better than Gzip inside Gzip)
-            ByteArrayOutputStream bos = new ByteArrayOutputStream();
-            NbtIo.write(nbt, new java.io.DataOutputStream(bos));
-            byte[] nbtBytes = bos.toByteArray();
-
-            // 3. Read Stats/Advancements from Disk if enabled
-            Map<String, Object> statsMap = Collections.emptyMap();
-            Map<String, Object> advMap = Collections.emptyMap();
-
-            if (config == null || config.syncStats) {
-                String statsJson = LocalDiskIO.readText(server.getWorldPath(LevelResource.PLAYER_STATS_DIR).resolve(uuid + ".json"));
-                statsMap = JSON_MAPPER.readValue(statsJson, Map.class);
-            }
-
-            if (config == null || config.syncAdvancements) {
-                String advJson = LocalDiskIO.readText(server.getWorldPath(LevelResource.PLAYER_ADVANCEMENTS_DIR).resolve(uuid + ".json"));
-                advMap = JSON_MAPPER.readValue(advJson, Map.class);
-            }
-
-            NATSPlayerDataBridge.debugLog("Sync: Packing bundle for {} [NBT: {}b, Stats: {} top-level keys, Adv: {} keys]", 
-                player.getName().getString(), nbtBytes.length, statsMap.size(), advMap.size());
-
-            PlayerDataBundle bundle = new PlayerDataBundle(
-                uuid, nbtBytes, statsMap, advMap, System.currentTimeMillis()
-            );
-
-            PlayerStorage.getInstance().pushBundle(bundle);
-            
-            if (markClean) {
-                setSessionState(uuid, savage.natsplayerdata.model.PlayerState.CLEAN);
-            }
-        } catch (Exception e) {
-            NATSPlayerDataBridge.LOGGER.error("Sync Error: Failed to pack bundle for {}: {}", player.getName().getString(), e.getMessage());
-        }
+        }, PlayerStorage.VIRTUAL_EXECUTOR);
     }
 
     /**
