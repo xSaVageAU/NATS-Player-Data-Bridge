@@ -16,22 +16,24 @@ public class NbtFilterUtil {
         BridgeConfig config = NATSPlayerDataBridge.getConfig();
         if (config == null || config.filterKeys == null || config.filterKeys.isEmpty()) return;
 
-        boolean isWhitelist = "whitelist".equalsIgnoreCase(config.filterMode);
-
-        if (isWhitelist) {
-            // Whitelist Mode: sync ONLY keys in filterKeys
-            Set<String> whitelist = new HashSet<>(config.filterKeys);
-            Set<String> keys = new HashSet<>(tag.keySet());
-            for (String key : keys) {
-                if (!whitelist.contains(key)) {
+        switch (config.filterMode.toLowerCase()) {
+            case "whitelist" -> {
+                // Whitelist Mode: sync ONLY keys in filterKeys
+                var whitelist = java.util.Set.copyOf(config.filterKeys);
+                var keys = new java.util.HashSet<>(tag.keySet());
+                for (String key : keys) {
+                    if (!whitelist.contains(key)) {
+                        tag.remove(key);
+                    }
+                }
+            }
+            case "blacklist" -> {
+                // Blacklist Mode: sync everything except keys in filterKeys
+                for (String key : config.filterKeys) {
                     tag.remove(key);
                 }
             }
-        } else {
-            // Blacklist Mode: sync everything except keys in filterKeys
-            for (String key : config.filterKeys) {
-                tag.remove(key);
-            }
+            default -> NATSPlayerDataBridge.LOGGER.warn("Unknown filter mode: {}", config.filterMode);
         }
     }
 }
