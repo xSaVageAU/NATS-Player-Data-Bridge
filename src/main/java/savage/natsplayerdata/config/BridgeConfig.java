@@ -37,30 +37,25 @@ public class BridgeConfig {
     public String filterMode = "whitelist";
 
     /**
+     * Default NBT keys to synchronize between servers.
+     */
+    private static final List<String> DEFAULT_FILTER_KEYS = List.of(
+            "Inventory", "EnderItems", "SelectedItemSlot", "Health",
+            "foodExhaustionLevel", "foodLevel", "foodSaturationLevel", "foodTickTimer",
+            "seenCredits", "XpLevel", "XpP", "XpTotal",
+            "active_effects", "AbsorptionAmount", "equipment"
+    );
+
+    /**
      * Top-level NBT keys to be filtered.
      */
-    public List<String> filterKeys = new ArrayList<>();
+    public List<String> filterKeys = new ArrayList<>(DEFAULT_FILTER_KEYS);
 
     /** The NATS KV bucket name for player data sync. */
     public String dataBucketName = "player-sync-v1";
 
     public BridgeConfig() {
-        filterKeys.add("Inventory");
-        filterKeys.add("EnderItems");
-        filterKeys.add("SelectedItemSlot");
-        filterKeys.add("Health");
-        filterKeys.add("foodExhaustionLevel");
-        filterKeys.add("foodLevel");
-        filterKeys.add("foodSaturationLevel");
-        filterKeys.add("foodTickTimer");
-        filterKeys.add("seenCredits");
-        filterKeys.add("XpLevel");
-        filterKeys.add("XpP");
-        filterKeys.add("XpTotal");
-        filterKeys.add("active_effects");
-        filterKeys.add("AbsorptionAmount");
-        filterKeys.add("equipment");
-
+        // Defaults are now initialized directly in the field.
     }
 
     /**
