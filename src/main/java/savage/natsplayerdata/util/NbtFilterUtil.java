@@ -4,9 +4,6 @@ import net.minecraft.nbt.CompoundTag;
 import savage.natsplayerdata.NATSPlayerDataBridge;
 import savage.natsplayerdata.config.BridgeConfig;
 
-import java.util.HashSet;
-import java.util.Set;
-
 public class NbtFilterUtil {
 
     /**

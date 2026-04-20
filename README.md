@@ -38,7 +38,7 @@ Save the above as `nats-server.conf` and start your NATS server using:
 
 ## Configuration
 
-### 1. Connection settings (`config/nats-fabric.json` or `.yml`)
+### 1. Connection settings (`config/nats-fabric.yml`)
 You must configure the library mod first so the bridge can talk to your NATS server:
 - `natsUrl`: The address of your NATS server (e.g., `nats://127.0.0.1:4222`).
 - `serverName`: A unique name for this server instance (e.g., `survival-1`).

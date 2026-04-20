@@ -116,13 +116,13 @@ public class PlayerDataManager {
                 if (config == null || config.syncStats) {
                     java.nio.file.Path statsPath = server.getWorldPath(LevelResource.PLAYER_STATS_DIR).resolve(uuid + ".json");
                     String statsJson = LocalDiskIO.readText(statsPath);
-                    statsMap = JSON_MAPPER.readValue(statsJson, Map.class);
+                    statsMap = JSON_MAPPER.readValue(statsJson, new com.fasterxml.jackson.core.type.TypeReference<Map<String, Object>>() {});
                 }
 
                 if (config == null || config.syncAdvancements) {
                     java.nio.file.Path advPath = server.getWorldPath(LevelResource.PLAYER_ADVANCEMENTS_DIR).resolve(uuid + ".json");
                     String advJson = LocalDiskIO.readText(advPath);
-                    advMap = JSON_MAPPER.readValue(advJson, Map.class);
+                    advMap = JSON_MAPPER.readValue(advJson, new com.fasterxml.jackson.core.type.TypeReference<Map<String, Object>>() {});
                 }
 
                 NATSPlayerDataBridge.debugLog("Sync: Packing bundle for {} [NBT: {}b, Stats: {} keys, Adv: {} keys]", 
