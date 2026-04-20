@@ -26,7 +26,7 @@ import java.util.concurrent.TimeUnit;
 public class PlayerDataManager {
 
     private static final Map<UUID, CompletableFuture<Optional<PlayerDataBundle>>> PENDING_FETCHES = new ConcurrentHashMap<>();
-    private static final java.util.Set<net.minecraft.server.network.ServerLoginPacketListenerImpl> ACTIVE_LOGIN_HANDLERS = java.util.Collections.newSetFromMap(new java.util.WeakHashMap<>());
+    private static final java.util.Set<net.minecraft.server.network.ServerLoginPacketListenerImpl> ACTIVE_LOGIN_HANDLERS = java.util.concurrent.ConcurrentHashMap.newKeySet();
     private static final com.fasterxml.jackson.databind.ObjectMapper JSON_MAPPER = new com.fasterxml.jackson.databind.ObjectMapper();
 
     public static void markLoginHandlerActive(net.minecraft.server.network.ServerLoginPacketListenerImpl handler) {
