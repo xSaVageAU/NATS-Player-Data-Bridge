@@ -24,8 +24,9 @@ dependencies {
 	// Fabric API. This is technically optional, but you probably want it anyway.
 	implementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_api_version}"
 
-	// NATS-Fabric Mod (Shared Cluster Connection)
-	implementation("savage.natsfabric:nats-fabric:1.0.0")
+	// NATS-Fabric Mod (Jar-in-Jar)
+	// Build NATS-Fabric first before building the Bridge.
+	include(implementation("savage.natsfabric:nats-fabric:1.0.0-rc.1"))
 	implementation("io.nats:jnats:2.25.2")
 
 	// Binary Serialization (CBOR)
