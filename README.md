@@ -1,10 +1,16 @@
 # NATS Player Data Bridge
 
-A Fabric mod for Minecraft servers that synchronizes player data (inventories, stats, and advancements) across a cluster using the [NATS](https://nats.io) messaging system.
+A Fabric mod that syncs player data (inventories, stats, and advancements) across your server cluster using [NATS](https://nats.io).
 
-## Overview
+## How it works
 
-This mod allows players to jump between different servers in a cluster while keeping their items and progress intact. When a player leaves a server, their data is saved to a NATS Key-Value bucket; when they join another server, that data is retrieved and applied before they spawn.
+When a player leaves, their data is saved to a NATS Key-Value bucket. When they join another server in the cluster, that data is pulled back down and applied before they spawn.
+
+## Installation
+
+1. Put the mod jar in your `mods/` folder.
+2. The core NATS library is already included, so you don't need any other files.
+3. Start the server once to generate the config.
 
 ## NATS Infrastructure Setup
 
@@ -28,50 +34,40 @@ jetstream {
 ```
 
 Save the above as `nats-server.conf` and start your NATS server using:
-`.\nats-server.exe -c nats-server.conf`
 
-## Installation
+**Linux / macOS:**
+`./nats-server -c nats-server.conf`
 
-1. Place the `nats-player-data-bridge` jar into the `mods/` folder of all servers in your cluster.
-2. Ensure the **[NATS-Fabric](https://github.com/xSaVageAU/NATS-Fabric)** library mod is also installed.
-3. Start each server once to generate the configuration files.
+**Windows:**
+`nats-server.exe -c nats-server.conf`
 
 ## Configuration
 
-### 1. Connection settings (`config/nats-fabric.yml`)
-You must configure the library mod first so the bridge can talk to your NATS server:
-- `natsUrl`: The address of your NATS server (e.g., `nats://127.0.0.1:4222`).
-- `serverName`: A unique name for this server instance (e.g., `survival-1`).
-- `natsAuthToken`: The secret token configured in your NATS server.
-- `natsUsername` / `natsPassword`: Alternative credentials if using user-based auth.
+### 1. Connection (`config/nats-fabric.yml`)
+Configure your NATS server details here (URL, Token, and a unique Server Name).
 
-### 2. Bridge settings (`config/nats-player-data-bridge.json`)
-- `syncStats`: Enable/disable statistics synchronization.
-- `syncAdvancements`: Enable/disable advancement synchronization.
-- `filterKeys`: Choose which NBT tags (like `Inventory` or `EnderItems`) to sync or exclude.
+### 2. Bridge Settings (`config/nats-player-data-bridge.json`)
+- `syncStats`: Sync player statistics.
+- `syncAdvancements`: Sync advancements.
+- `filterKeys`: Choose which NBT data to sync (defaults to standard inventory/health etc).
 
 ## Commands
 
-All commands require administrative permissions.
+All commands require OP/Admin permissions.
 
 | Command | Description |
 |---|---|
-| `/nats sync [player]` | Manually push data to the cluster. Defaults to self. |
-| `/nats sessions list` | View all active session locks and their statuses across the cluster. |
-| `/nats sessions clean <uuid>` | Manually reset a player's session lock if it becomes stuck. |
+| `/nats sync [player]` | Manually save player data to the cluster. |
+| `/nats sessions list` | Check all active session locks. |
+| `/nats sessions clean <uuid>` | Reset a stuck session lock. |
 
----
+## How it handles data
 
-## Technical Details (Data Integrity)
-
-The bridge is designed with several production-grade safety layers to prevent "split-brain" scenarios and data duplication:
-
-- **Atomic Locking (CAS)**: Uses NATS *Compare-and-Set* (Check-and-Set) logic. A server only acquires a session if and only if the revision matches the last known state, preventing race conditions during simultaneous logins.
-- **Multi-Phase Lifecycle Guards**: Captures disconnects in every phase of the networking stack (Login, Configuration, and Play). This ensures orphaned locks are released even if a client force-closes during a loading screen.
-- **Fencing Guards**: The server enforces strict local ownership checks. If a session is cleaned or stolen while a server is still running, that server will immediately block all data pushes to prevent stale overwrites.
-- **Startup Reconciliation**: On startup, each server automatically scans the cluster for any DIRTY sessions it previously owned (orphaned by a crash) and resets them to CLEAN.
-- **Binary Bundles**: Uses `zstd` compression and `CBOR` serialization for maximum efficiency, making data payloads significantly smaller and faster to transfer than standard JSON or Gzipped NBT.
-- **Fail-to-Safety**: If the cluster is unreachable or a lock is contested, the player is rejected with a descriptive message rather than being allowed to play with stale or orphanded data.
+To keep things consistent when moving between servers:
+- **Locking**: Prevents data from being overwritten if a player is somehow active on two servers at once.
+- **Background Saving**: Saves are handled in the background to avoid causing lag spikes.
+- **Recovery**: If a server crashes, it will automatically try to clear any locks it was holding when it restarts.
+- **Format**: Uses a compact binary format to keep data transfers small and fast.
 
 ## License
 
