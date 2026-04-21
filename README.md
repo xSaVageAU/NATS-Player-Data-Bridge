@@ -60,12 +60,16 @@ All commands require OP/Admin permissions.
 | `/nats sync [player]` | Manually save player data to the cluster. |
 | `/nats sessions list` | Check all active session locks. |
 | `/nats sessions clean <uuid>` | Reset a stuck session lock. |
+| `/nats backup push <player>` | Create a long-term snapshot of a player's data. |
+| `/nats backup list <player>` | View manual snapshots available for a player. |
+| `/nats backup restore <player> <rev>` | Restore a specific snapshot (Player MUST be offline). |
 
 ## How it handles data
 
 To keep things consistent when moving between servers:
 - **Locking**: Prevents data from being overwritten if a player is somehow active on two servers at once.
 - **Background Saving**: Saves are handled in the background to avoid causing lag spikes.
+- **Rollbacks**: If a player's data is corrupted, an admin can rollback to a previous revision. **Note**: The player must be offline during a rollback to prevent their "live" session from overwriting the restored data.
 - **Recovery**: If a server crashes, it will automatically try to clear any locks it was holding when it restarts.
 - **Format**: Uses a compact binary format to keep data transfers small and fast.
 

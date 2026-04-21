@@ -69,6 +69,22 @@ public class BridgeCommands {
 
                 // --- /nats backup ---
                 .then(net.minecraft.commands.Commands.literal("backup")
+                    // push <player>
+                    .then(net.minecraft.commands.Commands.literal("push")
+                        .then(net.minecraft.commands.Commands.argument("player", net.minecraft.commands.arguments.EntityArgument.player())
+                            .executes(ctx -> {
+                                var player = net.minecraft.commands.arguments.EntityArgument.getPlayer(ctx, "player");
+                                PlayerDataManager.backUp(player, ctx.getSource().getServer());
+                                ctx.getSource().sendSuccess(() -> Component.literal("§aLong-term backup snapshot initiated for §e" + player.getName().getString()), true);
+                                return 1;
+                            }))
+                        .executes(ctx -> {
+                            var player = ctx.getSource().getPlayerOrException();
+                            PlayerDataManager.backUp(player, ctx.getSource().getServer());
+                            ctx.getSource().sendSuccess(() -> Component.literal("§aLong-term backup snapshot initiated for your data."), true);
+                            return 1;
+                        }))
+
                     // list <player>
                     .then(net.minecraft.commands.Commands.literal("list")
                         .then(net.minecraft.commands.Commands.argument("player", net.minecraft.commands.arguments.GameProfileArgument.gameProfile())
@@ -92,12 +108,12 @@ public class BridgeCommands {
                                     var time = java.time.LocalDateTime.ofInstant(entry.getCreated().toInstant(), java.time.ZoneId.systemDefault());
                                     ctx.getSource().sendSuccess(() -> Component.literal("§eRev: " + entry.getRevision() + " §8| §f" + time.format(formatter)), false);
                                 }
-                                ctx.getSource().sendSuccess(() -> Component.literal("§7Use /nats backup rollback <player> <rev> to restore."), false);
+                                ctx.getSource().sendSuccess(() -> Component.literal("§7Use /nats backup restore <player> <rev> to restore."), false);
                                 return 1;
                             })))
                     
-                    // rollback <player> <revision>
-                    .then(net.minecraft.commands.Commands.literal("rollback")
+                    // restore <player> <revision>
+                    .then(net.minecraft.commands.Commands.literal("restore")
                         .then(net.minecraft.commands.Commands.argument("player", net.minecraft.commands.arguments.GameProfileArgument.gameProfile())
                             .then(net.minecraft.commands.Commands.argument("revision", com.mojang.brigadier.arguments.LongArgumentType.longArg(1))
                                 .executes(ctx -> {
@@ -109,33 +125,19 @@ public class BridgeCommands {
                                     
                                     // Safety: Refuse rollback if player is online.
                                     if (ctx.getSource().getServer().getPlayerList().getPlayer(uuid) != null) {
-                                        ctx.getSource().sendFailure(Component.literal("§cCannot rollback an online player. Please kick them first."));
+                                        ctx.getSource().sendFailure(Component.literal("§cCannot restore an online player. Please kick them first."));
                                         return 1;
                                     }
 
                                     boolean success = savage.natsplayerdata.backup.BackupManager.getInstance().restoreRevision(uuid, rev);
                                     if (success) {
-                                        ctx.getSource().sendSuccess(() -> Component.literal("§aSuccessfully rolled back " + profile.name() + " to revision §e" + rev), true);
+                                        ctx.getSource().sendSuccess(() -> Component.literal("§aSuccessfully restored " + profile.name() + " to revision §e" + rev), true);
                                     } else {
                                         ctx.getSource().sendFailure(Component.literal("§cFailed to restore backup. Does the revision exist?"));
                                     }
                                     return 1;
                                 }))))
-
-                    // [player] (Legacy / Direct capture)
-                    .then(net.minecraft.commands.Commands.argument("player", net.minecraft.commands.arguments.EntityArgument.player())
-                        .executes(ctx -> {
-                            var player = net.minecraft.commands.arguments.EntityArgument.getPlayer(ctx, "player");
-                            PlayerDataManager.backUp(player, ctx.getSource().getServer());
-                            ctx.getSource().sendSuccess(() -> Component.literal("§aLong-term backup snapshot initiated for §e" + player.getName().getString()), true);
-                            return 1;
-                        }))
-                    .executes(ctx -> {
-                        var player = ctx.getSource().getPlayerOrException();
-                        PlayerDataManager.backUp(player, ctx.getSource().getServer());
-                        ctx.getSource().sendSuccess(() -> Component.literal("§aLong-term backup snapshot initiated for your data."), true);
-                        return 1;
-                    }))
+                )
             );
         });
     }
