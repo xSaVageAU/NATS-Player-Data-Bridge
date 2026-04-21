@@ -129,23 +129,24 @@ public class PlayerStorage {
         try {
             KeyValueEntry entry = kvBucket.get("bundle." + uuid.toString());
             if (entry == null || entry.getValue() == null) return Optional.empty();
-
-            byte[] compressedBinary = entry.getValue();
-            long startNanos = System.nanoTime();
-            
-            byte[] decompressedBinary = CompressionUtil.decompress(compressedBinary);
-            double decompressMs = (System.nanoTime() - startNanos) / 1_000_000.0;
-            
-            NATSPlayerDataBridge.debugLog("Cluster: Fetched {} bytes (Zstd decompressed to {} bytes in {}ms) bundle for {}", compressedBinary.length, decompressedBinary.length, String.format("%.2f", decompressMs), uuid);
-            
-            PlayerDataBundle bundle = CBOR_MAPPER.readValue(decompressedBinary, PlayerDataBundle.class);
-            return Optional.of(bundle);
+            return deserializeBundle(entry.getValue());
         } catch (Exception e) {
             NATSPlayerDataBridge.LOGGER.error("Failed to fetch/decode CBOR bundle for {}: {}", uuid, e.getMessage());
-            // Throwing here forces the login sequence to crash out. 
-            // This is safer than returning Optional.empty(), which would let Minecraft 
-            // load the stale local disk file and cause an inventory rollback.
             throw new RuntimeException("§cFailed to load your player data from the cluster. Please try again.");
+        }
+    }
+
+    /**
+     * Helper to deserialize a compressed CBOR bundle.
+     */
+    public Optional<PlayerDataBundle> deserializeBundle(byte[] compressedBinary) {
+        try {
+            byte[] decompressed = CompressionUtil.decompress(compressedBinary);
+            PlayerDataBundle bundle = CBOR_MAPPER.readValue(decompressed, PlayerDataBundle.class);
+            return Optional.ofNullable(bundle);
+        } catch (Exception e) {
+            NATSPlayerDataBridge.LOGGER.error("Cluster: Failed to deserialize bundle: {}", e.getMessage());
+            return Optional.empty();
         }
     }
 

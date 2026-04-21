@@ -72,14 +72,29 @@ public class BridgeEvents {
                         var session = entry.state();
                         expectedRevision = entry.revision();
 
-                        if (session.state() == savage.natsplayerdata.model.PlayerState.DIRTY && !localServerId.equals(session.lastServer())) {
-                            NATSPlayerDataBridge.LOGGER.error("Cluster: Rejecting login for {} - session is currently locked by '{}'", uuid, session.lastServer());
-                            server.execute(() -> handler.disconnect(Component.literal("§Your player data is currently locked by server: §b" + session.lastServer() + "\n§7Please wait a moment and try again.")));
+                        if (session.state() == savage.natsplayerdata.model.PlayerState.DIRTY) {
+                            String owner = session.lastServer();
+                            boolean isLocal = localServerId.equals(owner);
+                            
+                            NATSPlayerDataBridge.LOGGER.error("Cluster: Rejecting login for {} - session is {} DIRTY (Owner: {})", uuid, isLocal ? "LOCAL" : "REMOTE", owner);
+                            
+                            String message = isLocal 
+                                ? "§cCluster Error: Your session was left hanging on this server.\n§7Please wait a moment for the cluster to self-heal."
+                                : "§cYour player data is currently locked by server: §b" + owner + "\n§7Please wait a moment and try again.";
+                            
+                            server.execute(() -> handler.disconnect(Component.literal(message)));
                             return;
+                        }
+
+                        // ATOMIC REDIRECT: If the state is RESTORING, we accept the join but prepare to pull from backup
+                        if (session.state() == savage.natsplayerdata.model.PlayerState.RESTORING) {
+                            NATSPlayerDataBridge.LOGGER.info("Cluster: Redirection active for {} - Pulling from Backup Revision {}", uuid, session.restoreRevision());
+                            // We don't return here; we fall through to the lock-acquisition below.
                         }
                     }
 
                     // b) Atomic Acquire Lock (CAS)
+                    // We mark it as DIRTY and 'owned' by us.
                     var newState = savage.natsplayerdata.model.SessionState.create(uuid, savage.natsplayerdata.model.PlayerState.DIRTY, localServerId);
                     boolean success = PlayerStorage.getInstance().pushSession(newState, expectedRevision);
 
@@ -92,8 +107,13 @@ public class BridgeEvents {
                     NATSPlayerDataBridge.debugLog("Cluster: Atomic lock acquired for {}. Marking DIRTY.", uuid);
                     PlayerDataManager.markLoginHandlerActive(handler);
 
-                    // c) Start data pre-fetch (This one is already async internally)
-                    PlayerDataManager.requestAsyncFetch(uuid);
+                    // c) Start data pre-fetch
+                    // If we were in RESTORING mode, we need to pass that info to the fetcher!
+                    final long targetBackupRevision = (entryOpt.isPresent() && entryOpt.get().state().state() == savage.natsplayerdata.model.PlayerState.RESTORING)
+                        ? entryOpt.get().state().restoreRevision() 
+                        : -1;
+
+                    PlayerDataManager.requestAsyncFetch(uuid, targetBackupRevision);
                 }, savage.natsfabric.NatsManager.getInstance().getExecutor());
 
                 // Tell the login process to wait for our NATS logic to finish

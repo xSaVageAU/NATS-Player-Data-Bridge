@@ -45,13 +45,42 @@ public class PlayerDataManager {
      * Starts an asynchronous fetch for player data from the cluster.
      * This should be called early in the login process (e.g., PreLogin).
      */
-    public static java.util.concurrent.CompletableFuture<?> requestAsyncFetch(UUID uuid) {
+    public static java.util.concurrent.CompletableFuture<Optional<PlayerDataBundle>> requestAsyncFetch(UUID uuid, long backupRevision) {
         if (PENDING_FETCHES.containsKey(uuid)) return PENDING_FETCHES.get(uuid);
         
-        NATSPlayerDataBridge.debugLog("Cluster: Starting async pre-fetch for {}", uuid);
-        CompletableFuture<Optional<PlayerDataBundle>> future = PlayerStorage.getInstance().fetchBundleAsync(uuid);
-        PENDING_FETCHES.put(uuid, future);
+        NATSPlayerDataBridge.debugLog("Cluster: Starting async {} fetch for {}", (backupRevision != -1 ? "BACKUP" : "SYNC"), uuid);
         
+        var future = java.util.concurrent.CompletableFuture.supplyAsync(() -> {
+            try {
+                if (backupRevision != -1) {
+                    // --- REDIRECT TO BACKUP BUCKET ---
+                    var history = savage.natsplayerdata.backup.BackupManager.getInstance().getBackupHistory(uuid);
+                    var targetEntry = history.stream()
+                        .filter(e -> e.getRevision() == backupRevision)
+                        .findFirst();
+
+                    if (targetEntry.isPresent()) {
+                        byte[] compressedData = targetEntry.get().getValue();
+                        
+                        // Commit this rollback to the main sync bucket immediately
+                        PlayerStorage.getInstance().pushRawBundle(uuid, compressedData);
+                        
+                        // Deserialize and return the bundle for local use
+                        return PlayerStorage.getInstance().deserializeBundle(compressedData);
+                    } else {
+                        NATSPlayerDataBridge.LOGGER.error("Cluster: Backup redirect failed for {} - Revision {} not found!", uuid, backupRevision);
+                        // Fallback to sync bucket if backup fails
+                    }
+                }
+
+                // Standard sync bucket fetch
+                return PlayerStorage.getInstance().fetchBundle(uuid);
+            } catch (Exception e) {
+                NATSPlayerDataBridge.LOGGER.error("Cluster: Async fetch failed for {}: {}", uuid, e.getMessage());
+                return Optional.<PlayerDataBundle>empty();
+            }
+        }, PlayerStorage.VIRTUAL_EXECUTOR);
+
         // Cleanup after 30 seconds if never consumed
         future.orTimeout(30, TimeUnit.SECONDS).whenComplete((res, ex) -> {
             if (ex != null) {
@@ -90,6 +119,13 @@ public class PlayerDataManager {
                 
                 if (entryOpt.isPresent()) {
                     var session = entryOpt.get().state();
+                    
+                    // GLOBAL FENCING: If an admin has marked this session as RESTORING, we must ABORT!
+                    if (session.state() == savage.natsplayerdata.model.PlayerState.RESTORING) {
+                        NATSPlayerDataBridge.LOGGER.info("Cluster: Aborting data push for {} - A global rollback is pending. Leaving lock as RESTORING.", playerName);
+                        return;
+                    }
+
                     if (session.state() != savage.natsplayerdata.model.PlayerState.DIRTY || !localServerId.equals(session.lastServer())) {
                         NATSPlayerDataBridge.LOGGER.error("CATASTROPHIC DATA SAFETY FAULT: Attempted to push data for {} but session lock is either CLEAN or owned by another server: {}", playerName, session.lastServer());
                         return;

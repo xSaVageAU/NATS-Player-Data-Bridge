@@ -123,18 +123,24 @@ public class BridgeCommands {
                                     var uuid = profile.id();
                                     long rev = com.mojang.brigadier.arguments.LongArgumentType.getLong(ctx, "revision");
                                     
-                                    // Safety: Refuse rollback if player is online.
-                                    if (ctx.getSource().getServer().getPlayerList().getPlayer(uuid) != null) {
-                                        ctx.getSource().sendFailure(Component.literal("§cCannot restore an online player. Please kick them first."));
-                                        return 1;
+                                    // --- THE NEW ATOMIC INSTRUCTION-BASED RESTORE ---
+                                    
+                                    // 1. Post the instruction to NATS. 
+                                    // This marks the session as RESTORING and attaches the target revision ID.
+                                    String localServerId = savage.natsfabric.NatsManager.getInstance().getServerName();
+                                    var restoreSession = savage.natsplayerdata.model.SessionState.createRestore(uuid, localServerId, rev);
+                                    
+                                    // We use a blind push to ensure it hits NATS regardless of current state.
+                                    savage.natsplayerdata.storage.PlayerStorage.getInstance().pushSession(restoreSession);
+
+                                    // 2. Kick the player if they are online.
+                                    // The 'prepareAndPush' logic will see the RESTORING state and abort automatically.
+                                    var onlinePlayer = ctx.getSource().getServer().getPlayerList().getPlayer(uuid);
+                                    if (onlinePlayer != null) {
+                                        onlinePlayer.connection.disconnect(Component.literal("§cYour data is being restored by an administrator.\n§7Please log back in to apply the backup."));
                                     }
 
-                                    boolean success = savage.natsplayerdata.backup.BackupManager.getInstance().restoreRevision(uuid, rev);
-                                    if (success) {
-                                        ctx.getSource().sendSuccess(() -> Component.literal("§aSuccessfully restored " + profile.name() + " to revision §e" + rev), true);
-                                    } else {
-                                        ctx.getSource().sendFailure(Component.literal("§cFailed to restore backup. Does the revision exist?"));
-                                    }
+                                    ctx.getSource().sendSuccess(() -> Component.literal("§aRollback instruction posted for " + profile.name() + " (Revision §e" + rev + "§a)"), true);
                                     return 1;
                                 }))))
                 )
