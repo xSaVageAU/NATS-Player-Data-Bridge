@@ -23,11 +23,13 @@ public class SyncService {
      * Handles redirection to historical backups if a ROLLBACK is pending.
      */
     public static CompletableFuture<Optional<PlayerDataBundle>> requestAsyncFetch(UUID uuid, long backupRevision) {
-        if (PENDING_FETCHES.containsKey(uuid))
+        // Only return cached future for standard logins. 
+        // If this is a RESTORE/ROLLBACK, we MUST force a fresh redirection fetch.
+        if (backupRevision == -1 && PENDING_FETCHES.containsKey(uuid))
             return PENDING_FETCHES.get(uuid);
 
-        NATSPlayerDataBridge.debugLog("Cluster: Starting async {} fetch for {}",
-                (backupRevision != -1 ? "BACKUP" : "SYNC"), uuid);
+        NATSPlayerDataBridge.LOGGER.info("Cluster: Initiating async {} fetch for {}",
+                (backupRevision != -1 ? "BACKUP (Rev: " + backupRevision + ")" : "SYNC"), uuid);
 
         var future = CompletableFuture.supplyAsync(() -> {
             try {

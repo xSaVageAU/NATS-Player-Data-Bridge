@@ -105,7 +105,10 @@ public class PlayerDataManager {
 
         // Check for pending async fetch
         Optional<PlayerDataBundle> bundleOpt = SyncService.consumePendingFetch(uuid);
-        if (bundleOpt.isEmpty()) {
+        if (bundleOpt.isPresent()) {
+            NATSPlayerDataBridge.debugLog("Cluster: Successfully consumed async pre-fetch for {}", uuid);
+        } else {
+            NATSPlayerDataBridge.debugLog("Cluster: No async fetch found for {}, performing blocking fallback pull...", uuid);
             bundleOpt = PlayerStorage.getInstance().fetchBundle(uuid);
         }
 

@@ -48,12 +48,14 @@ public class HandshakeEvents {
                     // 2. Determine Fetch Source (Live vs Rollback)
                     var sessionOpt = PlayerStorage.getInstance().fetchSession(uuid);
                     long backupRevision = -1L;
-                    if (sessionOpt.isPresent()
-                            && sessionOpt.get().state().state() == savage.natsplayerdata.model.PlayerState.RESTORING) {
-                        backupRevision = sessionOpt.get().state().restoreRevision();
-                        NATSPlayerDataBridge.LOGGER.info(
-                                "Cluster: Detected RESTORING state for {} - Redirecting fetch to backup rev: {}", uuid,
-                                backupRevision);
+                    if (sessionOpt.isPresent()) {
+                        long rev = sessionOpt.get().state().restoreRevision();
+                        if (rev != -1) {
+                            backupRevision = rev;
+                            NATSPlayerDataBridge.LOGGER.info(
+                                    "Cluster: Detected rollback instruction for {} - Redirecting fetch to backup rev: {}",
+                                    uuid, backupRevision);
+                        }
                     }
 
                     // 3. Initiate Async Data Fetch

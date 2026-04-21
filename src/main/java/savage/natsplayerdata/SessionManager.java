@@ -23,18 +23,25 @@ public class SessionManager {
      */
     public static boolean tryAcquireLock(UUID uuid) {
         var sessionOpt = PlayerStorage.getInstance().fetchSession(uuid);
+        String localServerId = savage.natsfabric.NatsManager.getInstance().getServerName();
         
         if (sessionOpt.isPresent()) {
-            var session = sessionOpt.get().state();
+            var entry = sessionOpt.get();
+            var session = entry.state();
             
             // FAIL-TO-SAFETY: Even if WE own the lock, if it is DIRTY, 
             // the player's session is in an inconsistent state. Reject.
             if (session.state() == PlayerState.DIRTY) {
                 return false;
             }
+
+            // Lock is either CLEAN or RESTORING. Claim it but preserve any rollback intent.
+            long restoreRev = session.restoreRevision();
+            SessionState newState = new SessionState(uuid, PlayerState.DIRTY, localServerId, System.currentTimeMillis(), restoreRev);
+            return PlayerStorage.getInstance().pushSession(newState, entry.revision());
         }
         
-        // Lock is either CLEAN, RESTORING, or missing. safe to claim.
+        // No lock exists. Safe to claim blindly.
         setSessionState(uuid, PlayerState.DIRTY);
         return true;
     }
