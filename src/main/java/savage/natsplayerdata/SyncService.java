@@ -34,14 +34,11 @@ public class SyncService {
         var future = CompletableFuture.supplyAsync(() -> {
             try {
                 if (backupRevision != -1) {
-                    // --- REDIRECT TO BACKUP BUCKET ---
-                    var history = savage.natsplayerdata.backup.BackupManager.getInstance().getBackupHistory(uuid);
-                    var targetEntry = history.stream()
-                            .filter(e -> e.getRevision() == backupRevision)
-                            .findFirst();
+                    // --- DIRECT REDIRECT TO BACKUP BUCKET ---
+                    var targetOpt = savage.natsplayerdata.backup.BackupManager.getInstance().getBackupEntry(uuid, backupRevision);
 
-                    if (targetEntry.isPresent()) {
-                        byte[] compressedData = targetEntry.get().getValue();
+                    if (targetOpt.isPresent()) {
+                        byte[] compressedData = targetOpt.get().getValue();
 
                         // Commit this rollback to the main sync bucket immediately
                         PlayerStorage.getInstance().pushRawBundle(uuid, compressedData);

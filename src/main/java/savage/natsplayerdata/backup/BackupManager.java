@@ -103,24 +103,28 @@ public class BackupManager {
     }
 
     /**
+     * Fetches a specific historical revision entry.
+     */
+    public java.util.Optional<io.nats.client.api.KeyValueEntry> getBackupEntry(UUID uuid, long revision) {
+        if (!init()) return java.util.Optional.empty();
+        try {
+            return java.util.Optional.ofNullable(backupBucket.get("backup." + uuid, revision));
+        } catch (Exception e) {
+            NATSPlayerDataBridge.LOGGER.error("Cluster: Failed to fetch backup revision {} for {}: {}", revision, uuid, e.getMessage());
+            return java.util.Optional.empty();
+        }
+    }
+
+    /**
      * Fetches a specific historical revision and pushes it to the main sync bucket.
      */
     public boolean restoreRevision(UUID uuid, long revision) {
-        if (!init()) return false;
+        var targetOpt = getBackupEntry(uuid, revision);
+        if (targetOpt.isEmpty()) return false;
+        
         try {
-            // 1. Get the old data from the backup bucket
-            var history = backupBucket.history("backup." + uuid);
-            var targetEntry = history.stream()
-                .filter(e -> e.getRevision() == revision)
-                .findFirst();
-
-            if (targetEntry.isEmpty()) return false;
-
-            // 2. Push it back to the main sync bucket as the "current" data
-            // We use PlayerStorage for this as it handles the "bundle.<uuid>" key format.
-            byte[] compressedData = targetEntry.get().getValue();
+            byte[] compressedData = targetOpt.get().getValue();
             savage.natsplayerdata.storage.PlayerStorage.getInstance().pushRawBundle(uuid, compressedData);
-            
             return true;
         } catch (Exception e) {
             NATSPlayerDataBridge.LOGGER.error("Cluster: Failed to restore revision {} for {}: {}", revision, uuid, e.getMessage());
