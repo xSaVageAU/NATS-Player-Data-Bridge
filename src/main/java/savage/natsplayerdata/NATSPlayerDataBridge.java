@@ -36,9 +36,15 @@ public class NATSPlayerDataBridge implements ModInitializer {
 
 	@Override
 	public void onInitialize() {
-		LOGGER.info("NATS Player Data Bridge: Initializing real-time synchronization cache...");
+		LOGGER.info("NATS Player Data Bridge initializing...");
+		
+		// Load config
 		config = BridgeConfig.load();
 
+		// Initialize Backup System
+		savage.natsplayerdata.backup.BackupManager.getInstance();
+
+		// Register commands and events
 		ServerLifecycleEvents.SERVER_STARTED.register(server -> {
 			SERVER = server;
 		});

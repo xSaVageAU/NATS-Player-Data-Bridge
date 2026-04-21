@@ -54,6 +54,9 @@ public class BridgeConfig {
     /** The NATS KV bucket name for player data sync. */
     public String dataBucketName = "player-sync-v1";
 
+    /** The NATS KV bucket name for long-term backups. */
+    public String backupBucketName = "player-backups-v1";
+
     public BridgeConfig() {
         // Defaults are now initialized directly in the field.
     }

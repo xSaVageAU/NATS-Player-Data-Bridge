@@ -108,6 +108,20 @@ public class PlayerStorage {
     }
 
     /**
+     * Directly pushes a pre-compressed binary blob to the cluster.
+     * Useful for restoring backups without needing to re-process the data.
+     */
+    public void pushRawBundle(UUID uuid, byte[] compressedBinary) {
+        if (kvBucket == null) return;
+        try {
+            kvBucket.put("bundle." + uuid.toString(), compressedBinary);
+            NATSPlayerDataBridge.debugLog("Cluster: Pushed raw binary bundle ({} bytes) for {}", compressedBinary.length, uuid);
+        } catch (Exception e) {
+            NATSPlayerDataBridge.LOGGER.error("Failed to push raw binary bundle: {}", e.getMessage());
+        }
+    }
+
+    /**
      * Fetches and deserializes a player bundle from the cluster.
      */
     public Optional<PlayerDataBundle> fetchBundle(UUID uuid) {

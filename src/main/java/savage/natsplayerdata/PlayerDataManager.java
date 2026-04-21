@@ -73,7 +73,6 @@ public class PlayerDataManager {
         String playerName = player.getName().getString();
         
         // 1. Capture LIVE NBT (MUST BE MAIN THREAD)
-        // We capture the raw NBT here so it's thread-safe.
         net.minecraft.world.level.storage.TagValueOutput output = net.minecraft.world.level.storage.TagValueOutput.createWithContext(net.minecraft.util.ProblemReporter.DISCARDING, server.registryAccess());
         player.saveWithoutId(output);
         CompoundTag nbt = output.buildResult();
@@ -84,9 +83,8 @@ public class PlayerDataManager {
 
         // 3. Offload the heavy lifting to a Virtual Thread
         java.util.concurrent.CompletableFuture.runAsync(() -> {
-            BridgeConfig config = NATSPlayerDataBridge.getConfig();
             try {
-                // SESSION LOCK: STRICT PUSH GUARD (Network I/O)
+                // SESSION LOCK: STRICT PUSH GUARD
                 var entryOpt = PlayerStorage.getInstance().fetchSession(uuid);
                 String localServerId = savage.natsfabric.NatsManager.getInstance().getServerName();
                 
@@ -101,36 +99,8 @@ public class PlayerDataManager {
                     return;
                 }
 
-                // Filtering (Memory heavy)
-                NbtFilterUtil.filterNbt(nbt);
-                
-                // Serialize NBT to bytes
-                ByteArrayOutputStream bos = new ByteArrayOutputStream();
-                NbtIo.write(nbt, new java.io.DataOutputStream(bos));
-                byte[] nbtBytes = bos.toByteArray();
-
-                // Read Stats/Advancements from Disk (Disk I/O)
-                Map<String, Object> statsMap = Collections.emptyMap();
-                Map<String, Object> advMap = Collections.emptyMap();
-
-                if (config == null || config.syncStats) {
-                    java.nio.file.Path statsPath = server.getWorldPath(LevelResource.PLAYER_STATS_DIR).resolve(uuid + ".json");
-                    String statsJson = LocalDiskIO.readText(statsPath);
-                    statsMap = JSON_MAPPER.readValue(statsJson, new com.fasterxml.jackson.core.type.TypeReference<Map<String, Object>>() {});
-                }
-
-                if (config == null || config.syncAdvancements) {
-                    java.nio.file.Path advPath = server.getWorldPath(LevelResource.PLAYER_ADVANCEMENTS_DIR).resolve(uuid + ".json");
-                    String advJson = LocalDiskIO.readText(advPath);
-                    advMap = JSON_MAPPER.readValue(advJson, new com.fasterxml.jackson.core.type.TypeReference<Map<String, Object>>() {});
-                }
-
-                NATSPlayerDataBridge.debugLog("Sync: Packing bundle for {} [NBT: {}b, Stats: {} keys, Adv: {} keys]", 
-                    playerName, nbtBytes.length, statsMap.size(), advMap.size());
-
-                PlayerDataBundle bundle = new PlayerDataBundle(
-                    uuid, nbtBytes, statsMap, advMap, System.currentTimeMillis()
-                );
+                PlayerDataBundle bundle = captureBundle(uuid, playerName, nbt, server);
+                if (bundle == null) return;
 
                 // Networking (NATS Push)
                 PlayerStorage.getInstance().pushBundle(bundle);
@@ -142,6 +112,65 @@ public class PlayerDataManager {
                 NATSPlayerDataBridge.LOGGER.error("Async Sync Error: Failed to push bundle for {}: {}", playerName, e.getMessage());
             }
         }, PlayerStorage.VIRTUAL_EXECUTOR);
+    }
+
+    /**
+     * Creates a manual backup snapshot for a player and pushes it to the backup bucket.
+     */
+    public static void backUp(ServerPlayer player, MinecraftServer server) {
+        UUID uuid = player.getUUID();
+        String playerName = player.getName().getString();
+
+        // 1. Capture LIVE NBT (Main Thread)
+        net.minecraft.world.level.storage.TagValueOutput output = net.minecraft.world.level.storage.TagValueOutput.createWithContext(net.minecraft.util.ProblemReporter.DISCARDING, server.registryAccess());
+        player.saveWithoutId(output);
+        CompoundTag nbt = output.buildResult();
+
+        // 2. Capture Stats/Advancements (Main Thread)
+        server.getPlayerList().getPlayerStats(player).save();
+        server.getPlayerList().getPlayerAdvancements(player).save();
+
+        // 3. Async Backup Push
+        java.util.concurrent.CompletableFuture.runAsync(() -> {
+            PlayerDataBundle bundle = captureBundle(uuid, playerName, nbt, server);
+            if (bundle != null) {
+                savage.natsplayerdata.backup.BackupManager.getInstance().createBackup(bundle);
+            }
+        }, PlayerStorage.VIRTUAL_EXECUTOR);
+    }
+
+    private static PlayerDataBundle captureBundle(UUID uuid, String playerName, CompoundTag nbt, MinecraftServer server) {
+        BridgeConfig config = NATSPlayerDataBridge.getConfig();
+        try {
+            // Filtering
+            NbtFilterUtil.filterNbt(nbt);
+            
+            // Serialize NBT to bytes
+            ByteArrayOutputStream bos = new ByteArrayOutputStream();
+            NbtIo.write(nbt, new java.io.DataOutputStream(bos));
+            byte[] nbtBytes = bos.toByteArray();
+
+            // Read Stats/Advancements from Disk
+            Map<String, Object> statsMap = Collections.emptyMap();
+            Map<String, Object> advMap = Collections.emptyMap();
+
+            if (config == null || config.syncStats) {
+                java.nio.file.Path statsPath = server.getWorldPath(LevelResource.PLAYER_STATS_DIR).resolve(uuid + ".json");
+                String statsJson = LocalDiskIO.readText(statsPath);
+                statsMap = JSON_MAPPER.readValue(statsJson, new com.fasterxml.jackson.core.type.TypeReference<Map<String, Object>>() {});
+            }
+
+            if (config == null || config.syncAdvancements) {
+                java.nio.file.Path advPath = server.getWorldPath(LevelResource.PLAYER_ADVANCEMENTS_DIR).resolve(uuid + ".json");
+                String advJson = LocalDiskIO.readText(advPath);
+                advMap = JSON_MAPPER.readValue(advJson, new com.fasterxml.jackson.core.type.TypeReference<Map<String, Object>>() {});
+            }
+
+            return new PlayerDataBundle(uuid, nbtBytes, statsMap, advMap, System.currentTimeMillis());
+        } catch (Exception e) {
+            NATSPlayerDataBridge.LOGGER.error("Bundle Creation Error for {}: {}", playerName, e.getMessage());
+            return null;
+        }
     }
 
     /**
