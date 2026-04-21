@@ -8,6 +8,7 @@ import net.minecraft.world.level.storage.LevelResource;
 import savage.natsplayerdata.config.BridgeConfig;
 import savage.natsplayerdata.model.PlayerDataBundle;
 import savage.natsplayerdata.storage.PlayerStorage;
+import savage.natsplayerdata.util.BundlePacker;
 import savage.natsplayerdata.util.LocalDiskIO;
 
 import java.io.ByteArrayOutputStream;
@@ -95,8 +96,8 @@ public class PlayerDataManager {
         server.getPlayerList().getPlayerStats(player).save();
         server.getPlayerList().getPlayerAdvancements(player).save();
 
-        Map<String, Object> stats = captureStats(uuid, server);
-        Map<String, Object> adv = captureAdv(uuid, server);
+        Map<String, Object> stats = BundlePacker.captureStats(uuid, server);
+        Map<String, Object> adv = BundlePacker.captureAdv(uuid, server);
 
         // 3. Offload the heavy lifting to a Virtual Thread
         java.util.concurrent.CompletableFuture.runAsync(() -> {
@@ -128,7 +129,7 @@ public class PlayerDataManager {
                     return;
                 }
 
-                PlayerDataBundle bundle = captureBundle(uuid, playerName, nbt, stats, adv);
+                PlayerDataBundle bundle = BundlePacker.captureBundle(uuid, playerName, nbt, stats, adv);
                 if (bundle == null) return;
 
                 // Networking (NATS Push)
@@ -159,53 +160,16 @@ public class PlayerDataManager {
         server.getPlayerList().getPlayerStats(player).save();
         server.getPlayerList().getPlayerAdvancements(player).save();
 
-        Map<String, Object> stats = captureStats(uuid, server);
-        Map<String, Object> adv = captureAdv(uuid, server);
+        Map<String, Object> stats = BundlePacker.captureStats(uuid, server);
+        Map<String, Object> adv = BundlePacker.captureAdv(uuid, server);
 
         // 3. Async Backup Push
         java.util.concurrent.CompletableFuture.runAsync(() -> {
-            PlayerDataBundle bundle = captureBundle(uuid, playerName, nbt, stats, adv);
+            PlayerDataBundle bundle = BundlePacker.captureBundle(uuid, playerName, nbt, stats, adv);
             if (bundle != null) {
                 savage.natsplayerdata.backup.BackupManager.getInstance().createBackup(bundle);
             }
         }, PlayerStorage.VIRTUAL_EXECUTOR);
-    }
-
-    private static Map<String, Object> captureStats(UUID uuid, MinecraftServer server) {
-        try {
-            java.nio.file.Path statsPath = server.getWorldPath(LevelResource.PLAYER_STATS_DIR).resolve(uuid + ".json");
-            String statsJson = savage.natsplayerdata.util.LocalDiskIO.readText(statsPath);
-            return JSON_MAPPER.readValue(statsJson, new com.fasterxml.jackson.core.type.TypeReference<Map<String, Object>>() {});
-        } catch (Exception e) {
-            return java.util.Collections.emptyMap();
-        }
-    }
-
-    private static Map<String, Object> captureAdv(UUID uuid, MinecraftServer server) {
-        try {
-            java.nio.file.Path advPath = server.getWorldPath(LevelResource.PLAYER_ADVANCEMENTS_DIR).resolve(uuid + ".json");
-            String advJson = savage.natsplayerdata.util.LocalDiskIO.readText(advPath);
-            return JSON_MAPPER.readValue(advJson, new com.fasterxml.jackson.core.type.TypeReference<Map<String, Object>>() {});
-        } catch (Exception e) {
-            return java.util.Collections.emptyMap();
-        }
-    }
-
-    private static PlayerDataBundle captureBundle(UUID uuid, String playerName, CompoundTag nbt, Map<String, Object> stats, Map<String, Object> adv) {
-        try {
-            // Filtering
-            savage.natsplayerdata.util.NbtFilterUtil.filterNbt(nbt);
-            
-            // Serialize NBT to bytes
-            ByteArrayOutputStream bos = new ByteArrayOutputStream();
-            net.minecraft.nbt.NbtIo.write(nbt, new java.io.DataOutputStream(bos));
-            byte[] nbtBytes = bos.toByteArray();
-
-            return new PlayerDataBundle(uuid, nbtBytes, stats, adv, System.currentTimeMillis());
-        } catch (Exception e) {
-            NATSPlayerDataBridge.LOGGER.error("Bundle Creation Error for {}: {}", playerName, e.getMessage());
-            return null;
-        }
     }
 
     /**
