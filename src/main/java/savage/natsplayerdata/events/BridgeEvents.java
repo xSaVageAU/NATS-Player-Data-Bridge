@@ -11,43 +11,6 @@ import savage.natsplayerdata.storage.PlayerStorage;
 public class BridgeEvents {
 
     public static void register() {
-        ServerLifecycleEvents.SERVER_STARTED.register(server -> {
-            // Initialize storage and self-heal crashed sessions
-            PlayerStorage.getInstance().reconcileLocalSessions();
-        });
-
-        // Join event just logs now, lock acquisition happens in QUERY_START
-        ServerPlayConnectionEvents.JOIN.register((handler, sender, server) -> {
-            NATSPlayerDataBridge.debugLog("ServerPlayConnectionEvents.JOIN Triggered!");
-            NATSPlayerDataBridge.debugLog("Event: Player joined {} (Lock already acquired).", handler.getPlayer().getName().getString());
-        });
-
-        // Register Disconnect Event
-        ServerPlayConnectionEvents.DISCONNECT.register((handler, server) -> {
-            NATSPlayerDataBridge.debugLog("ServerPlayConnectionEvents.DISCONNECT Triggered!");
-            
-            // If the server is stopping, the main shutdown listener handles the save.
-            if (NATSPlayerDataBridge.isStopping()) return;
-
-            NATSPlayerDataBridge.debugLog("Event: Player disconnected {}, saving data and marking session as CLEAN...", handler.getPlayer().getName().getString());
-            server.execute(() -> PlayerDataManager.prepareAndPush(handler.getPlayer(), server, true)); // Mark Clean
-        });
-
-        // Periodic Cluster Checkpoints (Auto-save hook)
-        ServerLifecycleEvents.AFTER_SAVE.register((server, flush, force) -> {
-            // No checkpointing during shutdown; the main listener handles the final save.
-            if (NATSPlayerDataBridge.isStopping()) return;
-
-            NATSPlayerDataBridge.debugLog("ServerLifecycleEvents.AFTER_SAVE Triggered!");
-            var players = server.getPlayerList().getPlayers();
-            if (!players.isEmpty()) {
-                NATSPlayerDataBridge.debugLog("Cluster: Auto-save detected, pushing checkpoints for {} players...", players.size());
-                for (var player : players) {
-                    PlayerDataManager.prepareAndPush(player, server, false); // Keep Dirty
-                }
-            }
-        });
-
         // --- 1. EARLY BLOCK (NATS OFFLINE) ---
         ServerLoginConnectionEvents.INIT.register((handler, server) -> {
             NATSPlayerDataBridge.debugLog("ServerLoginConnectionEvents.INIT Triggered!");

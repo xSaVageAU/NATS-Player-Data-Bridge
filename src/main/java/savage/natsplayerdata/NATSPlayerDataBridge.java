@@ -8,6 +8,8 @@ import org.slf4j.LoggerFactory;
 import savage.natsplayerdata.commands.BridgeCommands;
 import savage.natsplayerdata.config.BridgeConfig;
 import savage.natsplayerdata.events.BridgeEvents;
+import savage.natsplayerdata.events.LifecycleEvents;
+import savage.natsplayerdata.events.PlayEvents;
 
 /**
  * Main entry point for the NATS Player Data Bridge.
@@ -25,8 +27,16 @@ public class NATSPlayerDataBridge implements ModInitializer {
 		return SERVER;
 	}
 
+	public static void setServer(MinecraftServer server) {
+		SERVER = server;
+	}
+
 	public static boolean isStopping() {
 		return stopping;
+	}
+
+	public static void setStopping(boolean value) {
+		stopping = value;
 	}
 
 	public static BridgeConfig getConfig() {
@@ -49,20 +59,9 @@ public class NATSPlayerDataBridge implements ModInitializer {
 		// Initialize Backup System
 		savage.natsplayerdata.backup.BackupManager.getInstance();
 
-		// Register commands and events
-		ServerLifecycleEvents.SERVER_STARTED.register(server -> {
-			SERVER = server;
-		});
-
-		ServerLifecycleEvents.SERVER_STOPPING.register(server -> {
-			stopping = true;
-			LOGGER.info("NATS Bridge: Server stopping, draining player data pushes...");
-			for (var player : server.getPlayerList().getPlayers()) {
-				PlayerDataManager.prepareAndPush(player, server, true); // Mark Clean
-			}
-			SERVER = null;
-		});
-
+		// Register all backend services and events
+		LifecycleEvents.register();
+		PlayEvents.register();
 		BridgeCommands.register();
 		BridgeEvents.register();
 
