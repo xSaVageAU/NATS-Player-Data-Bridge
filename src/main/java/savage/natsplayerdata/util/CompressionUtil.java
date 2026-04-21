@@ -18,7 +18,10 @@ public class CompressionUtil {
      * Decompresses Zstd data.
      */
     public static byte[] decompress(byte[] compressedData) {
-        long decompressedSize = Zstd.decompressedSize(compressedData);
+        long decompressedSize = Zstd.getFrameContentSize(compressedData);
+        if (decompressedSize < 0) {
+            throw new RuntimeException("§cFailed to determine decompressed size for binary data.");
+        }
         return Zstd.decompress(compressedData, (int) decompressedSize);
     }
 }

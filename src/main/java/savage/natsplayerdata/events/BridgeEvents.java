@@ -1,8 +1,6 @@
 package savage.natsplayerdata.events;
 
-import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
 import net.fabricmc.fabric.api.networking.v1.ServerLoginConnectionEvents;
-import net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents;
 import net.minecraft.network.chat.Component;
 import savage.natsplayerdata.NATSPlayerDataBridge;
 import savage.natsplayerdata.PlayerDataManager;

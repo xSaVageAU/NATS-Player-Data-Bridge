@@ -9,10 +9,8 @@ import savage.natsplayerdata.config.BridgeConfig;
 import savage.natsplayerdata.model.PlayerDataBundle;
 import savage.natsplayerdata.storage.PlayerStorage;
 import savage.natsplayerdata.util.LocalDiskIO;
-import savage.natsplayerdata.util.NbtFilterUtil;
 
 import java.io.ByteArrayOutputStream;
-import java.util.Collections;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
