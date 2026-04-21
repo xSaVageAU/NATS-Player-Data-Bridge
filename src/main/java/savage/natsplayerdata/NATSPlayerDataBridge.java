@@ -6,7 +6,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import savage.natsplayerdata.commands.BridgeCommands;
 import savage.natsplayerdata.config.BridgeConfig;
-import savage.natsplayerdata.events.BridgeEvents;
+import savage.natsplayerdata.events.HandshakeEvents;
 import savage.natsplayerdata.events.LifecycleEvents;
 import savage.natsplayerdata.events.PlayEvents;
 
@@ -61,8 +61,8 @@ public class NATSPlayerDataBridge implements ModInitializer {
 		// Register all backend services and events
 		LifecycleEvents.register();
 		PlayEvents.register();
+		HandshakeEvents.register();
 		BridgeCommands.register();
-		BridgeEvents.register();
 
 		LOGGER.info("NATS Player Data Bridge: Binary CBOR engine ready.");
 	}

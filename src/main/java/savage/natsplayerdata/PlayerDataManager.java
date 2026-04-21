@@ -24,20 +24,7 @@ import java.util.concurrent.TimeUnit;
 public class PlayerDataManager {
 
     private static final Map<UUID, CompletableFuture<Optional<PlayerDataBundle>>> PENDING_FETCHES = new ConcurrentHashMap<>();
-    private static final java.util.Set<net.minecraft.server.network.ServerLoginPacketListenerImpl> ACTIVE_LOGIN_HANDLERS = java.util.concurrent.ConcurrentHashMap.newKeySet();
     private static final com.fasterxml.jackson.databind.ObjectMapper JSON_MAPPER = new com.fasterxml.jackson.databind.ObjectMapper();
-
-    public static void markLoginHandlerActive(net.minecraft.server.network.ServerLoginPacketListenerImpl handler) {
-        ACTIVE_LOGIN_HANDLERS.add(handler);
-    }
-
-    public static boolean isLoginHandlerActive(net.minecraft.server.network.ServerLoginPacketListenerImpl handler) {
-        return ACTIVE_LOGIN_HANDLERS.contains(handler);
-    }
-
-    public static void clearLoginHandler(net.minecraft.server.network.ServerLoginPacketListenerImpl handler) {
-        ACTIVE_LOGIN_HANDLERS.remove(handler);
-    }
 
     /**
      * Starts an asynchronous fetch for player data from the cluster.
@@ -148,7 +135,7 @@ public class PlayerDataManager {
                 PlayerStorage.getInstance().pushBundle(bundle);
                 
                 if (markClean) {
-                    setSessionState(uuid, savage.natsplayerdata.model.PlayerState.CLEAN);
+                    savage.natsplayerdata.SessionManager.setSessionState(uuid, savage.natsplayerdata.model.PlayerState.CLEAN);
                 }
             } catch (Exception e) {
                 NATSPlayerDataBridge.LOGGER.error("Async Sync Error: Failed to push bundle for {}: {}", playerName, e.getMessage());
@@ -332,14 +319,6 @@ public class PlayerDataManager {
         }
     }
 
-    /**
-     * Updates the persistent session state for a player in the NATS cluster.
-     */
-    public static void setSessionState(UUID uuid, savage.natsplayerdata.model.PlayerState state) {
-        String serverId = savage.natsfabric.NatsManager.getInstance().getServerName();
-        var session = savage.natsplayerdata.model.SessionState.create(uuid, state, serverId);
-        PlayerStorage.getInstance().pushSession(session);
-    }
 
     /**
      * Clears a pending fetch from the cache. Should be called after the player joins or login fails.

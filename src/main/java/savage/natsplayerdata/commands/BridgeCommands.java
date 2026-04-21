@@ -59,9 +59,7 @@ public class BridgeCommands {
                         .then(net.minecraft.commands.Commands.argument("target", net.minecraft.commands.arguments.UuidArgument.uuid())
                             .executes(ctx -> {
                                 java.util.UUID targetUuid = net.minecraft.commands.arguments.UuidArgument.getUuid(ctx, "target");
-                                savage.natsplayerdata.storage.PlayerStorage.getInstance().pushSession(
-                                    savage.natsplayerdata.model.SessionState.create(targetUuid, savage.natsplayerdata.model.PlayerState.CLEAN, "admin-clean")
-                                );
+                                savage.natsplayerdata.SessionManager.setSessionState(targetUuid, savage.natsplayerdata.model.PlayerState.CLEAN);
                                 ctx.getSource().sendSuccess(() -> Component.literal("§aSuccessfully marked session for §e" + targetUuid + "§a as CLEAN."), true);
                                 return 1;
                             })))
@@ -127,11 +125,7 @@ public class BridgeCommands {
                                     
                                     // 1. Post the instruction to NATS. 
                                     // This marks the session as RESTORING and attaches the target revision ID.
-                                    String localServerId = savage.natsfabric.NatsManager.getInstance().getServerName();
-                                    var restoreSession = savage.natsplayerdata.model.SessionState.createRestore(uuid, localServerId, rev);
-                                    
-                                    // We use a blind push to ensure it hits NATS regardless of current state.
-                                    savage.natsplayerdata.storage.PlayerStorage.getInstance().pushSession(restoreSession);
+                                    savage.natsplayerdata.SessionManager.setSessionState(uuid, savage.natsplayerdata.model.PlayerState.RESTORING, rev);
 
                                     // 2. Kick the player if they are online.
                                     // The 'prepareAndPush' logic will see the RESTORING state and abort automatically.

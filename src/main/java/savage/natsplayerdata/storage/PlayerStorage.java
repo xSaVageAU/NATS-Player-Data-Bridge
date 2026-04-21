@@ -158,7 +158,7 @@ public class PlayerStorage {
     }
 
     /**
-     * Fetches a player's current session state along with its NATS revision (for CAS).
+     * Fetches current session lock state from NATS.
      */
     public Optional<SessionEntry> fetchSession(UUID uuid) {
         if (kvBucket == null) return Optional.empty();
