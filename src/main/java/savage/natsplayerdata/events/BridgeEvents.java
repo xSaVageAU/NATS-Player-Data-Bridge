@@ -25,12 +25,19 @@ public class BridgeEvents {
         // Register Disconnect Event
         ServerPlayConnectionEvents.DISCONNECT.register((handler, server) -> {
             NATSPlayerDataBridge.debugLog("ServerPlayConnectionEvents.DISCONNECT Triggered!");
+            
+            // If the server is stopping, the main shutdown listener handles the save.
+            if (NATSPlayerDataBridge.isStopping()) return;
+
             NATSPlayerDataBridge.debugLog("Event: Player disconnected {}, saving data and marking session as CLEAN...", handler.getPlayer().getName().getString());
             server.execute(() -> PlayerDataManager.prepareAndPush(handler.getPlayer(), server, true)); // Mark Clean
         });
 
         // Periodic Cluster Checkpoints (Auto-save hook)
         ServerLifecycleEvents.AFTER_SAVE.register((server, flush, force) -> {
+            // No checkpointing during shutdown; the main listener handles the final save.
+            if (NATSPlayerDataBridge.isStopping()) return;
+
             NATSPlayerDataBridge.debugLog("ServerLifecycleEvents.AFTER_SAVE Triggered!");
             var players = server.getPlayerList().getPlayers();
             if (!players.isEmpty()) {

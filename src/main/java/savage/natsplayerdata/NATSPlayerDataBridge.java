@@ -19,9 +19,14 @@ public class NATSPlayerDataBridge implements ModInitializer {
 	private static BridgeConfig config;
 
 	private static MinecraftServer SERVER;
+	private static boolean stopping = false;
 
 	public static MinecraftServer getServer() {
 		return SERVER;
+	}
+
+	public static boolean isStopping() {
+		return stopping;
 	}
 
 	public static BridgeConfig getConfig() {
@@ -50,6 +55,7 @@ public class NATSPlayerDataBridge implements ModInitializer {
 		});
 
 		ServerLifecycleEvents.SERVER_STOPPING.register(server -> {
+			stopping = true;
 			LOGGER.info("NATS Bridge: Server stopping, draining player data pushes...");
 			for (var player : server.getPlayerList().getPlayers()) {
 				PlayerDataManager.prepareAndPush(player, server, true); // Mark Clean

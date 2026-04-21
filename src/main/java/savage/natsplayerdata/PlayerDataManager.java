@@ -130,10 +130,15 @@ public class PlayerDataManager {
                     }
 
                     if (session.state() != savage.natsplayerdata.model.PlayerState.DIRTY || !localServerId.equals(session.lastServer())) {
+                        // During shutdown, we expect multiple events to fire for the same player.
+                        // If we are already CLEAN, just return silently.
+                        if (NATSPlayerDataBridge.isStopping()) return;
+
                         NATSPlayerDataBridge.LOGGER.error("CATASTROPHIC DATA SAFETY FAULT: Attempted to push data for {} but session lock is either CLEAN or owned by another server: {}", playerName, session.lastServer());
                         return;
                     }
                 } else {
+                    if (NATSPlayerDataBridge.isStopping()) return;
                     NATSPlayerDataBridge.LOGGER.error("CATASTROPHIC DATA SAFETY FAULT: Attempted to push data for {} but NO lock exists!", playerName);
                     return;
                 }
