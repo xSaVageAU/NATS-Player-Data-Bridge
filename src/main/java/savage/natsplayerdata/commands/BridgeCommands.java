@@ -19,7 +19,8 @@ public class BridgeCommands {
                 .requires(src -> src.permissions().hasPermission(net.minecraft.server.permissions.Permissions.COMMANDS_ADMIN))
                 
                 // --- Delegated Sub-commands ---
-                .then(AdminSubCommand.register())
+                .then(AdminSubCommand.registerInfo())
+                .then(AdminSubCommand.registerDebug())
                 .then(SyncSubCommand.register())
                 .then(SessionSubCommand.register())
                 .then(BackupSubCommand.register())

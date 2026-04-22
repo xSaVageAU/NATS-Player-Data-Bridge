@@ -12,9 +12,38 @@ import savage.natsplayerdata.NATSPlayerDataBridge;
  */
 public class AdminSubCommand {
 
-    public static LiteralArgumentBuilder<CommandSourceStack> register() {
+    public static LiteralArgumentBuilder<CommandSourceStack> registerInfo() {
         return Commands.literal("info")
             .executes(ctx -> showInfo(ctx.getSource()));
+    }
+
+    public static LiteralArgumentBuilder<CommandSourceStack> registerDebug() {
+        return Commands.literal("debug")
+            .then(Commands.literal("on").executes(ctx -> setDebug(ctx.getSource(), true)))
+            .then(Commands.literal("off").executes(ctx -> setDebug(ctx.getSource(), false)))
+            .executes(ctx -> toggleDebug(ctx.getSource()));
+    }
+
+    private static int toggleDebug(CommandSourceStack source) {
+        var config = NATSPlayerDataBridge.getConfig();
+        if (config == null) return 0;
+        
+        config.debug = !config.debug;
+        config.save();
+        
+        source.sendSuccess(() -> Component.literal("§7NATS Bridge: Debug mode " + (config.debug ? "§aENABLED" : "§cDISABLED")), true);
+        return 1;
+    }
+
+    private static int setDebug(CommandSourceStack source, boolean value) {
+        var config = NATSPlayerDataBridge.getConfig();
+        if (config == null) return 0;
+        
+        config.debug = value;
+        config.save();
+        
+        source.sendSuccess(() -> Component.literal("§7NATS Bridge: Debug mode " + (config.debug ? "§aENABLED" : "§cDISABLED")), true);
+        return 1;
     }
 
     private static int showInfo(CommandSourceStack source) {
