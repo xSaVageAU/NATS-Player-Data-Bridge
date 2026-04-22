@@ -1,12 +1,11 @@
 package savage.natsplayerdata.backup;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.dataformat.cbor.CBORFactory;
 import io.nats.client.KeyValue;
 import savage.natsfabric.NatsManager;
 import savage.natsplayerdata.NATSPlayerDataBridge;
 import savage.natsplayerdata.model.PlayerDataBundle;
 import savage.natsplayerdata.util.CompressionUtil;
+import savage.natsplayerdata.util.Serialization;
 
 import java.util.UUID;
 
@@ -15,7 +14,6 @@ import java.util.UUID;
  */
 public class BackupManager {
 
-    private static final ObjectMapper CBOR_MAPPER = new ObjectMapper(new CBORFactory());
     private KeyValue backupBucket;
 
     private static final class Holder {
@@ -77,7 +75,7 @@ public class BackupManager {
         }
 
         try {
-            byte[] cborBinary = CBOR_MAPPER.writeValueAsBytes(bundle);
+            byte[] cborBinary = Serialization.CBOR.writeValueAsBytes(bundle);
             byte[] compressedBinary = CompressionUtil.compress(cborBinary);
 
             // Using backup.<uuid> as the key to avoid any collisions

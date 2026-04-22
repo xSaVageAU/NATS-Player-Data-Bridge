@@ -22,8 +22,6 @@ import java.util.UUID;
  */
 public class BundlePacker {
 
-    private static final ObjectMapper JSON_MAPPER = new ObjectMapper();
-
     /**
      * Reads player statistics from the world's stats directory.
      */
@@ -31,7 +29,7 @@ public class BundlePacker {
         try {
             Path statsPath = server.getWorldPath(LevelResource.PLAYER_STATS_DIR).resolve(uuid + ".json");
             String statsJson = LocalDiskIO.readText(statsPath);
-            return JSON_MAPPER.readValue(statsJson, new TypeReference<Map<String, Object>>() {});
+            return Serialization.JSON.readValue(statsJson, new TypeReference<Map<String, Object>>() {});
         } catch (Exception e) {
             return Collections.emptyMap();
         }
@@ -44,7 +42,7 @@ public class BundlePacker {
         try {
             Path advPath = server.getWorldPath(LevelResource.PLAYER_ADVANCEMENTS_DIR).resolve(uuid + ".json");
             String advJson = LocalDiskIO.readText(advPath);
-            return JSON_MAPPER.readValue(advJson, new TypeReference<Map<String, Object>>() {});
+            return Serialization.JSON.readValue(advJson, new TypeReference<Map<String, Object>>() {});
         } catch (Exception e) {
             return Collections.emptyMap();
         }

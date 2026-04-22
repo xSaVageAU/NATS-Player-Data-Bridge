@@ -10,6 +10,7 @@ import savage.natsplayerdata.model.PlayerDataBundle;
 import savage.natsplayerdata.storage.PlayerStorage;
 import savage.natsplayerdata.util.BundlePacker;
 import savage.natsplayerdata.util.LocalDiskIO;
+import savage.natsplayerdata.util.Serialization;
 
 import java.io.ByteArrayOutputStream;
 import java.util.Map;
@@ -21,8 +22,6 @@ import java.util.UUID;
  * Acts as the final engine for applying synced state to the Minecraft world.
  */
 public class DataMergeService {
-
-    private static final com.fasterxml.jackson.databind.ObjectMapper JSON_MAPPER = new com.fasterxml.jackson.databind.ObjectMapper();
 
     /**
      * Starts an asynchronous fetch for player data from the cluster.
@@ -176,13 +175,13 @@ public class DataMergeService {
             // 6. Write Stats and Advancements only if enabled AND data was actually synced
             if ((config == null || config.syncStats) && !bundle.stats().isEmpty()) {
                 LocalDiskIO.writeText(server.getWorldPath(LevelResource.PLAYER_STATS_DIR).resolve(uuid + ".json"),
-                        JSON_MAPPER.writeValueAsString(bundle.stats()));
+                        Serialization.JSON.writeValueAsString(bundle.stats()));
             }
 
             if ((config == null || config.syncAdvancements) && !bundle.advancements().isEmpty()) {
                 LocalDiskIO.writeText(
                         server.getWorldPath(LevelResource.PLAYER_ADVANCEMENTS_DIR).resolve(uuid + ".json"),
-                        JSON_MAPPER.writeValueAsString(bundle.advancements()));
+                        Serialization.JSON.writeValueAsString(bundle.advancements()));
             }
 
             NATSPlayerDataBridge.debugLog("Cluster: Applied NATS bundle merge for {}", uuid);

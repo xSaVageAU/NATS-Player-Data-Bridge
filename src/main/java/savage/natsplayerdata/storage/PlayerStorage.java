@@ -1,13 +1,12 @@
 package savage.natsplayerdata.storage;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.dataformat.cbor.CBORFactory;
 import io.nats.client.KeyValue;
 import io.nats.client.api.KeyValueEntry;
 import savage.natsfabric.NatsManager;
 import savage.natsplayerdata.NATSPlayerDataBridge;
 import savage.natsplayerdata.model.PlayerDataBundle;
 import savage.natsplayerdata.util.CompressionUtil;
+import savage.natsplayerdata.util.Serialization;
 
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -21,9 +20,6 @@ import java.util.ArrayList;
  * Handles binary persistence of Player Bundles to the NATS cluster.
  */
 public class PlayerStorage {
-
-    private static final ObjectMapper JSON_MAPPER = new ObjectMapper();
-    private static final ObjectMapper CBOR_MAPPER = new ObjectMapper(new CBORFactory());
 
     private KeyValue kvBucket;
     public static final ExecutorService VIRTUAL_EXECUTOR = Executors.newVirtualThreadPerTaskExecutor();
@@ -94,7 +90,7 @@ public class PlayerStorage {
     public void pushBundle(PlayerDataBundle bundle) {
         if (kvBucket == null) return;
         try {
-            byte[] cborBinary = CBOR_MAPPER.writeValueAsBytes(bundle);
+            byte[] cborBinary = Serialization.CBOR.writeValueAsBytes(bundle);
             
             long startNanos = System.nanoTime();
             byte[] compressedBinary = CompressionUtil.compress(cborBinary);
@@ -142,7 +138,7 @@ public class PlayerStorage {
     public Optional<PlayerDataBundle> deserializeBundle(byte[] compressedBinary) {
         try {
             byte[] decompressed = CompressionUtil.decompress(compressedBinary);
-            PlayerDataBundle bundle = CBOR_MAPPER.readValue(decompressed, PlayerDataBundle.class);
+            PlayerDataBundle bundle = Serialization.CBOR.readValue(decompressed, PlayerDataBundle.class);
             return Optional.ofNullable(bundle);
         } catch (Exception e) {
             NATSPlayerDataBridge.LOGGER.error("Cluster: Failed to deserialize bundle: {}", e.getMessage());
@@ -166,7 +162,7 @@ public class PlayerStorage {
             KeyValueEntry entry = kvBucket.get("session." + uuid.toString());
             if (entry == null || entry.getValue() == null) return Optional.empty();
             
-            savage.natsplayerdata.model.SessionState state = JSON_MAPPER.readValue(entry.getValue(), savage.natsplayerdata.model.SessionState.class);
+            savage.natsplayerdata.model.SessionState state = Serialization.JSON.readValue(entry.getValue(), savage.natsplayerdata.model.SessionState.class);
             return Optional.of(new SessionEntry(state, entry.getRevision()));
         } catch (Exception e) {
             NATSPlayerDataBridge.LOGGER.error("Failed to fetch session state for {}: {}", uuid, e.getMessage());
@@ -182,7 +178,7 @@ public class PlayerStorage {
     public boolean pushSession(savage.natsplayerdata.model.SessionState state, long expectedRevision) {
         if (kvBucket == null) return false;
         try {
-            byte[] json = JSON_MAPPER.writeValueAsBytes(state);
+            byte[] json = Serialization.JSON.writeValueAsBytes(state);
             String key = "session." + state.uuid().toString();
 
             if (expectedRevision > 0) {
@@ -228,7 +224,7 @@ public class PlayerStorage {
                 try {
                     KeyValueEntry entry = kvBucket.get(key);
                     if (entry == null || entry.getValue() == null) continue;
-                    savage.natsplayerdata.model.SessionState session = JSON_MAPPER.readValue(entry.getValue(), savage.natsplayerdata.model.SessionState.class);
+                    savage.natsplayerdata.model.SessionState session = Serialization.JSON.readValue(entry.getValue(), savage.natsplayerdata.model.SessionState.class);
                     sessions.add(new SessionEntry(session, entry.getRevision()));
                 } catch (Exception e) {
                     NATSPlayerDataBridge.LOGGER.warn("Cluster: Failed to read session key '{}': {}", key, e.getMessage());
@@ -262,7 +258,7 @@ public class PlayerStorage {
                         KeyValueEntry entry = kvBucket.get(key);
                         if (entry == null || entry.getValue() == null) return;
 
-                        savage.natsplayerdata.model.SessionState session = JSON_MAPPER.readValue(entry.getValue(), savage.natsplayerdata.model.SessionState.class);
+                        savage.natsplayerdata.model.SessionState session = Serialization.JSON.readValue(entry.getValue(), savage.natsplayerdata.model.SessionState.class);
                         
                         if (session.state() == savage.natsplayerdata.model.PlayerState.DIRTY && localServerId.equals(session.lastServer())) {
                             NATSPlayerDataBridge.debugLog("Cluster: Healing orphaned session for {}", key);
