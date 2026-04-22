@@ -2,7 +2,7 @@ package savage.natsplayerdata.commands;
 
 import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback;
 import net.minecraft.network.chat.Component;
-import savage.natsplayerdata.PlayerDataManager;
+import savage.natsplayerdata.DataMergeService;
 
 public class BridgeCommands {
 
@@ -16,13 +16,13 @@ public class BridgeCommands {
                     .then(net.minecraft.commands.Commands.argument("player", net.minecraft.commands.arguments.EntityArgument.player())
                         .executes(ctx -> {
                             var player = net.minecraft.commands.arguments.EntityArgument.getPlayer(ctx, "player");
-                            PlayerDataManager.prepareAndPush(player, ctx.getSource().getServer(), false);
+                            DataMergeService.prepareAndPush(player, ctx.getSource().getServer(), false);
                             ctx.getSource().sendSuccess(() -> Component.literal("§aCluster bundle successfully pushed for " + player.getName().getString()), true);
                             return 1;
                         }))
                     .executes(ctx -> {
                         var player = ctx.getSource().getPlayerOrException();
-                        PlayerDataManager.prepareAndPush(player, ctx.getSource().getServer(), false);
+                        DataMergeService.prepareAndPush(player, ctx.getSource().getServer(), false);
                         ctx.getSource().sendSuccess(() -> Component.literal("§aCluster bundle successfully pushed for " + player.getName().getString()), true);
                         return 1;
                     }))
@@ -72,13 +72,13 @@ public class BridgeCommands {
                         .then(net.minecraft.commands.Commands.argument("player", net.minecraft.commands.arguments.EntityArgument.player())
                             .executes(ctx -> {
                                 var player = net.minecraft.commands.arguments.EntityArgument.getPlayer(ctx, "player");
-                                PlayerDataManager.backUp(player, ctx.getSource().getServer());
+                                DataMergeService.backUp(player, ctx.getSource().getServer());
                                 ctx.getSource().sendSuccess(() -> Component.literal("§aLong-term backup snapshot initiated for §e" + player.getName().getString()), true);
                                 return 1;
                             }))
                         .executes(ctx -> {
                             var player = ctx.getSource().getPlayerOrException();
-                            PlayerDataManager.backUp(player, ctx.getSource().getServer());
+                            DataMergeService.backUp(player, ctx.getSource().getServer());
                             ctx.getSource().sendSuccess(() -> Component.literal("§aLong-term backup snapshot initiated for your data."), true);
                             return 1;
                         }))

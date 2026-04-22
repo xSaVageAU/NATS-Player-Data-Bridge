@@ -2,7 +2,7 @@ package savage.natsplayerdata.events;
 
 import net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents;
 import savage.natsplayerdata.NATSPlayerDataBridge;
-import savage.natsplayerdata.PlayerDataManager;
+import savage.natsplayerdata.DataMergeService;
 
 /**
  * Handles events that occurs while a player is in the 'Play' phase (actively in the world).
@@ -24,7 +24,7 @@ public class PlayEvents {
             if (NATSPlayerDataBridge.isStopping()) return;
 
             NATSPlayerDataBridge.debugLog("Event: Player disconnected {}, saving data and marking session as CLEAN...", handler.getPlayer().getName().getString());
-            server.execute(() -> PlayerDataManager.prepareAndPush(handler.getPlayer(), server, true)); // Mark Clean
+            server.execute(() -> DataMergeService.prepareAndPush(handler.getPlayer(), server, true)); // Mark Clean
         });
     }
 }

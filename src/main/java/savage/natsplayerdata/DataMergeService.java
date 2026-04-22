@@ -17,9 +17,10 @@ import java.util.Optional;
 import java.util.UUID;
 
 /**
- * Handles the packing and unpacking of physical player files into CBOR bundles.
+ * Handles the merging of NATS cluster data with local player files. 
+ * Acts as the final engine for applying synced state to the Minecraft world.
  */
-public class PlayerDataManager {
+public class DataMergeService {
 
     private static final com.fasterxml.jackson.databind.ObjectMapper JSON_MAPPER = new com.fasterxml.jackson.databind.ObjectMapper();
 

@@ -8,7 +8,7 @@ import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import savage.natsplayerdata.NATSPlayerDataBridge;
-import savage.natsplayerdata.PlayerDataManager;
+import savage.natsplayerdata.DataMergeService;
 
 import java.util.UUID;
 
@@ -26,7 +26,7 @@ public abstract class PlayerSyncMixin {
         NATSPlayerDataBridge.debugLog("Cluster: Intercepted load for {}, checking NATS ledger...", uuid);
         
         // Fetch from cluster, overwrite local disk, and return the tag directly
-        java.util.Optional<net.minecraft.nbt.CompoundTag> opt = PlayerDataManager.fetchAndApply(uuid, this.server);
+        java.util.Optional<net.minecraft.nbt.CompoundTag> opt = DataMergeService.fetchAndApply(uuid, this.server);
         if (opt.isPresent()) {
             cir.setReturnValue(opt);
         }

@@ -2,7 +2,7 @@ package savage.natsplayerdata.events;
 
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
 import savage.natsplayerdata.NATSPlayerDataBridge;
-import savage.natsplayerdata.PlayerDataManager;
+import savage.natsplayerdata.DataMergeService;
 import savage.natsplayerdata.storage.PlayerStorage;
 
 /**
@@ -22,7 +22,7 @@ public class LifecycleEvents {
             NATSPlayerDataBridge.setStopping(true);
             NATSPlayerDataBridge.LOGGER.info("NATS Bridge: Server stopping, draining player data pushes...");
             for (var player : server.getPlayerList().getPlayers()) {
-                PlayerDataManager.prepareAndPush(player, server, true); // Mark Clean
+                DataMergeService.prepareAndPush(player, server, true); // Mark Clean
             }
             savage.natsplayerdata.NATSPlayerDataBridge.setServer(null);
         });
@@ -35,7 +35,7 @@ public class LifecycleEvents {
             if (!players.isEmpty()) {
                 NATSPlayerDataBridge.debugLog("Cluster: Auto-save detected, pushing checkpoints for {} players...", players.size());
                 for (var player : players) {
-                    PlayerDataManager.prepareAndPush(player, server, false); // Keep Dirty
+                    DataMergeService.prepareAndPush(player, server, false); // Keep Dirty
                 }
             }
         });
