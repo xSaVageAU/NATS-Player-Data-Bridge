@@ -26,7 +26,7 @@ dependencies {
 
 	// NATS-Fabric Mod (Jar-in-Jar)
 	// Build NATS-Fabric first before building the Bridge.
-	include(implementation("savage.natsfabric:nats-fabric:1.0.0-rc.1"))
+	include(implementation("savage.natsfabric:nats-fabric:1.0.1"))
 	implementation("io.nats:jnats:2.25.2")
 
 	// Binary Serialization (CBOR)

@@ -28,6 +28,6 @@
 		"minecraft": ">=26.1",
 		"java": ">=25",
 		"fabric-api": "*",
-		"nats-fabric": ">=1.0.0-rc.1"
+		"nats-fabric": ">=1.0.1"
 	}
 }
