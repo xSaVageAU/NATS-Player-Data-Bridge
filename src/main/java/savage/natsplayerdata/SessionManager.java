@@ -1,8 +1,9 @@
 package savage.natsplayerdata;
 
 import savage.natsplayerdata.model.PlayerState;
+import savage.natsplayerdata.model.SessionEntry;
 import savage.natsplayerdata.model.SessionState;
-import savage.natsplayerdata.storage.PlayerStorage;
+import savage.natsplayerdata.storage.SessionStorage;
 import java.util.UUID;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
@@ -10,7 +11,6 @@ import net.minecraft.server.network.ServerLoginPacketListenerImpl;
 
 /**
  * Handles cluster-wide session orchestration and lock safety.
- * This is the authority for player logon sequences.
  */
 public class SessionManager {
 
@@ -19,26 +19,23 @@ public class SessionManager {
     /**
      * STRICT FAIL-TO-SAFETY LOCK ACQUISITION
      * Returns true ONLY if the session is CLEAN or RESTORING.
-     * Dirty joins are always rejected to prevent session desync.
      */
     public static boolean tryAcquireLock(UUID uuid) {
-        var sessionOpt = PlayerStorage.getInstance().fetchSession(uuid);
+        var sessionOpt = SessionStorage.getInstance().fetchSession(uuid);
         String localServerId = savage.natsfabric.NatsManager.getInstance().getServerName();
         
         if (sessionOpt.isPresent()) {
-            var entry = sessionOpt.get();
-            var session = entry.state();
+            SessionEntry entry = sessionOpt.get();
+            SessionState session = entry.state();
             
-            // FAIL-TO-SAFETY: Even if WE own the lock, if it is DIRTY, 
-            // the player's session is in an inconsistent state. Reject.
             if (session.state() == PlayerState.DIRTY) {
                 return false;
             }
 
-            // Lock is either CLEAN or RESTORING. Claim it but preserve any rollback intent.
+            // Lock is either CLEAN or RESTORING.
             long restoreRev = session.restoreRevision();
             SessionState newState = new SessionState(uuid, PlayerState.DIRTY, localServerId, System.currentTimeMillis(), restoreRev);
-            return PlayerStorage.getInstance().pushSession(newState, entry.revision());
+            return SessionStorage.getInstance().pushSession(newState, entry.revision());
         }
         
         // No lock exists. Safe to claim blindly.
@@ -46,9 +43,6 @@ public class SessionManager {
         return true;
     }
 
-    /**
-     * Updates the global session state for a player.
-     */
     public static void setSessionState(UUID uuid, PlayerState state) {
         setSessionState(uuid, state, -1L);
     }
@@ -61,7 +55,7 @@ public class SessionManager {
         } else {
             newState = SessionState.create(uuid, state, localServerId);
         }
-        PlayerStorage.getInstance().pushSession(newState);
+        SessionStorage.getInstance().pushSession(newState);
     }
 
     // --- Login Handler Tracking (Ensures clean cleanup during handshake failures) ---

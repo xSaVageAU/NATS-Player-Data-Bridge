@@ -5,7 +5,8 @@ import net.fabricmc.fabric.api.networking.v1.ServerConfigurationConnectionEvents
 import net.minecraft.network.chat.Component;
 import savage.natsplayerdata.NATSPlayerDataBridge;
 import savage.natsplayerdata.SyncService;
-import savage.natsplayerdata.storage.PlayerStorage;
+import savage.natsplayerdata.storage.DataStorage;
+import savage.natsplayerdata.storage.SessionStorage;
 import java.util.concurrent.CompletableFuture;
 
 /**
@@ -21,7 +22,7 @@ public class HandshakeEvents {
         // --- 1. EARLY BLOCK (NATS OFFLINE) ---
         ServerLoginConnectionEvents.INIT.register((handler, server) -> {
             NATSPlayerDataBridge.debugLog("ServerLoginConnectionEvents.INIT Triggered!");
-            if (!PlayerStorage.getInstance().isStorageAvailable()) {
+            if (!SessionStorage.getInstance().isAvailable()) {
                 NATSPlayerDataBridge.LOGGER.error("Cluster: Rejecting login - NATS cluster is unreachable!");
                 handler.disconnect(Component
                         .literal("§cAuthentication failed: Cluster connection unreachable. Please try again later."));
@@ -46,7 +47,7 @@ public class HandshakeEvents {
                     }
 
                     // 2. Determine Fetch Source (Live vs Rollback)
-                    var sessionOpt = PlayerStorage.getInstance().fetchSession(uuid);
+                    var sessionOpt = SessionStorage.getInstance().fetchSession(uuid);
                     long backupRevision = -1L;
                     if (sessionOpt.isPresent()) {
                         long rev = sessionOpt.get().state().restoreRevision();
@@ -66,7 +67,7 @@ public class HandshakeEvents {
                     NATSPlayerDataBridge.LOGGER.error("Handshake Error for {}: {}", uuid, e.getMessage());
                     handler.disconnect(Component.literal("§cCluster Error: Failed to synchronize session lock."));
                 }
-            }, PlayerStorage.VIRTUAL_EXECUTOR);
+            }, DataStorage.VIRTUAL_EXECUTOR);
 
             synchronizer.waitFor(loginFuture);
         });
@@ -82,7 +83,7 @@ public class HandshakeEvents {
                     return;
 
                 savage.natsplayerdata.SessionManager.clearLoginHandler(handler);
-                var entryOpt = PlayerStorage.getInstance().fetchSession(uuid);
+                var entryOpt = SessionStorage.getInstance().fetchSession(uuid);
                 String localServerId = savage.natsfabric.NatsManager.getInstance().getServerName();
 
                 if (entryOpt.isPresent()) {
@@ -108,7 +109,7 @@ public class HandshakeEvents {
                 java.util.UUID uuid = handler.getOwner().id();
                 SyncService.consumePendingFetch(uuid);
 
-                var entryOpt = PlayerStorage.getInstance().fetchSession(uuid);
+                var entryOpt = SessionStorage.getInstance().fetchSession(uuid);
                 String localServerId = savage.natsfabric.NatsManager.getInstance().getServerName();
 
                 if (entryOpt.isPresent()) {

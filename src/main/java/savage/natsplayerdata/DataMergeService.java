@@ -7,7 +7,8 @@ import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.level.storage.LevelResource;
 import savage.natsplayerdata.config.BridgeConfig;
 import savage.natsplayerdata.model.PlayerDataBundle;
-import savage.natsplayerdata.storage.PlayerStorage;
+import savage.natsplayerdata.storage.DataStorage;
+import savage.natsplayerdata.storage.SessionStorage;
 import savage.natsplayerdata.util.BundlePacker;
 import savage.natsplayerdata.util.LocalDiskIO;
 import savage.natsplayerdata.util.Serialization;
@@ -83,7 +84,7 @@ public class DataMergeService {
         BridgeConfig config = NATSPlayerDataBridge.getConfig();
 
         // SESSION LOCK: STRICT PULL GUARD
-        var entryOpt = PlayerStorage.getInstance().fetchSession(uuid);
+        var entryOpt = SessionStorage.getInstance().fetchSession(uuid);
         String localServerId = savage.natsfabric.NatsManager.getInstance().getServerName();
         if (entryOpt.isPresent()) {
             var session = entryOpt.get().state();
@@ -109,7 +110,7 @@ public class DataMergeService {
             NATSPlayerDataBridge.debugLog("Cluster: Successfully consumed async pre-fetch for {}", uuid);
         } else {
             NATSPlayerDataBridge.debugLog("Cluster: No async fetch found for {}, performing blocking fallback pull...", uuid);
-            bundleOpt = PlayerStorage.getInstance().fetchBundle(uuid);
+            bundleOpt = DataStorage.getInstance().fetchBundle(uuid);
         }
 
         if (bundleOpt.isEmpty())

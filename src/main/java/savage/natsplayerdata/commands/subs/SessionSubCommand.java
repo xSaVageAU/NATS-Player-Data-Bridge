@@ -7,7 +7,7 @@ import net.minecraft.commands.arguments.UuidArgument;
 import net.minecraft.network.chat.Component;
 import savage.natsplayerdata.SessionManager;
 import savage.natsplayerdata.model.PlayerState;
-import savage.natsplayerdata.storage.PlayerStorage;
+import savage.natsplayerdata.storage.SessionStorage;
 
 import java.util.UUID;
 
@@ -32,7 +32,7 @@ public class SessionSubCommand {
     }
 
     private static int listSessions(CommandSourceStack source) {
-        var sessions = PlayerStorage.getInstance().getAllSessions();
+        var sessions = SessionStorage.getInstance().getAllSessions();
         if (sessions.isEmpty()) {
             source.sendSuccess(() -> Component.literal("§7No active sessions found in cluster."), false);
             return 1;

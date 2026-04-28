@@ -1,7 +1,9 @@
 package savage.natsplayerdata;
 
 import savage.natsplayerdata.model.PlayerDataBundle;
-import savage.natsplayerdata.storage.PlayerStorage;
+import savage.natsplayerdata.model.PlayerState;
+import savage.natsplayerdata.storage.DataStorage;
+import savage.natsplayerdata.storage.SessionStorage;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
@@ -41,10 +43,10 @@ public class SyncService {
                         byte[] compressedData = targetOpt.get().getValue();
 
                         // Commit this rollback to the main sync bucket immediately
-                        PlayerStorage.getInstance().pushRawBundle(uuid, compressedData);
+                        DataStorage.getInstance().pushRawBundle(uuid, compressedData);
 
                         // Deserialize and return the bundle for local use
-                        return PlayerStorage.getInstance().deserializeBundle(compressedData);
+                        return DataStorage.getInstance().deserializeBundle(compressedData);
                     } else {
                         NATSPlayerDataBridge.LOGGER.error(
                                 "Cluster: Backup redirect failed for {} - Revision {} not found!", uuid,
@@ -53,12 +55,12 @@ public class SyncService {
                 }
 
                 // Standard sync bucket fetch
-                return PlayerStorage.getInstance().fetchBundle(uuid);
+                return DataStorage.getInstance().fetchBundle(uuid);
             } catch (Exception e) {
                 NATSPlayerDataBridge.LOGGER.error("Cluster: Async fetch failed for {}: {}", uuid, e.getMessage());
                 return Optional.<PlayerDataBundle>empty();
             }
-        }, PlayerStorage.VIRTUAL_EXECUTOR);
+        }, DataStorage.VIRTUAL_EXECUTOR);
 
         // Cleanup after 30 seconds if never consumed
         future.orTimeout(30, TimeUnit.SECONDS).whenComplete((res, ex) -> {
@@ -98,7 +100,7 @@ public class SyncService {
         CompletableFuture.runAsync(() -> {
             try {
                 // SESSION LOCK: STRICT PUSH GUARD
-                var entryOpt = PlayerStorage.getInstance().fetchSession(uuid);
+                var entryOpt = SessionStorage.getInstance().fetchSession(uuid);
                 String localServerId = savage.natsfabric.NatsManager.getInstance().getServerName();
 
                 if (entryOpt.isPresent()) {
@@ -130,7 +132,7 @@ public class SyncService {
                 }
 
                 // Push the binary bundle
-                PlayerStorage.getInstance().pushBundle(bundle);
+                DataStorage.getInstance().pushBundle(bundle);
 
                 if (markClean) {
                     SessionManager.setSessionState(uuid, savage.natsplayerdata.model.PlayerState.CLEAN);
@@ -139,7 +141,7 @@ public class SyncService {
                 NATSPlayerDataBridge.LOGGER.error("Sync Error: Failed to push bundle for {}: {}", playerName,
                         e.getMessage());
             }
-        }, PlayerStorage.VIRTUAL_EXECUTOR);
+        }, DataStorage.VIRTUAL_EXECUTOR);
     }
 
     /**
@@ -150,6 +152,6 @@ public class SyncService {
             if (bundle != null) {
                 savage.natsplayerdata.backup.BackupManager.getInstance().createBackup(bundle);
             }
-        }, PlayerStorage.VIRTUAL_EXECUTOR);
+        }, DataStorage.VIRTUAL_EXECUTOR);
     }
 }

@@ -3,7 +3,7 @@ package savage.natsplayerdata.events;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
 import savage.natsplayerdata.NATSPlayerDataBridge;
 import savage.natsplayerdata.DataMergeService;
-import savage.natsplayerdata.storage.PlayerStorage;
+import savage.natsplayerdata.storage.SessionStorage;
 
 /**
  * Handles server-wide lifecycle events like startup, shutdown, and periodic saves.
@@ -14,7 +14,7 @@ public class LifecycleEvents {
         // Startup reconciliation
         ServerLifecycleEvents.SERVER_STARTED.register(server -> {
             savage.natsplayerdata.NATSPlayerDataBridge.setServer(server);
-            PlayerStorage.getInstance().reconcileLocalSessions();
+            SessionStorage.getInstance().reconcileLocalSessions();
         });
 
         // Shutdown data drain
