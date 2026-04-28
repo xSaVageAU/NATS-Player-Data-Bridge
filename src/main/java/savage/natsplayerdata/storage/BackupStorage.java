@@ -50,7 +50,7 @@ public class BackupStorage {
                 io.nats.client.KeyValueManagement kvm = conn.keyValueManagement();
                 kvm.create(KeyValueConfiguration.builder()
                         .name(bucketName)
-                        .maxHistoryPerKey(10)
+                        .maxHistoryPerKey(20)
                         .build());
                 backupBucket = conn.keyValue(bucketName);
                 NATSPlayerDataBridge.LOGGER.info("BackupStorage: Created persistent backup bucket '{}'", bucketName);
