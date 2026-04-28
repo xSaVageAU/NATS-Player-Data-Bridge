@@ -15,6 +15,7 @@ public class LifecycleEvents {
         ServerLifecycleEvents.SERVER_STARTED.register(server -> {
             savage.natsplayerdata.NATSPlayerDataBridge.setServer(server);
             SessionStorage.getInstance().reconcileLocalSessions();
+            savage.natsplayerdata.session.SessionManager.initRpcListener(server);
         });
 
         // Shutdown data drain

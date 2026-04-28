@@ -42,6 +42,34 @@ public class HandshakeEvents {
                     // 1. Acquire Local Lock (with FAIL-TO-SAFETY)
                     boolean locked = SessionManager.tryAcquireLock(uuid);
                     if (!locked) {
+                        // Only execute RPC Fallback if proxyMode is enabled
+                        if (NATSPlayerDataBridge.getConfig() != null && NATSPlayerDataBridge.getConfig().proxyMode) {
+                            var sessionOpt = SessionStorage.getInstance().fetchSession(uuid);
+                            if (sessionOpt.isPresent() && sessionOpt.get().state().state() == savage.natsplayerdata.model.PlayerState.DIRTY) {
+                                String owner = sessionOpt.get().state().lastServer();
+                                NATSPlayerDataBridge.LOGGER.info("Cluster: Proxy switch detected! Requesting lock release from {} for {}", owner, uuid);
+                                var conn = savage.natsfabric.NatsManager.getInstance().getConnection();
+                                if (conn != null) {
+                                    try {
+                                        // Ask the origin server to dump data and release the lock immediately
+                                        var reply = conn.request("session.release." + owner, uuid.toString().getBytes(), java.time.Duration.ofSeconds(2));
+                                        if (reply != null && "OK".equals(new String(reply.getData()))) {
+                                            NATSPlayerDataBridge.LOGGER.info("Cluster: Lock released by {}, acquiring...", owner);
+                                            // Give the async CAS update a tiny window to settle in NATS
+                                            Thread.sleep(50);
+                                            locked = SessionManager.tryAcquireLock(uuid);
+                                        }
+                                    } catch (Exception ignored) {
+                                        NATSPlayerDataBridge.LOGGER.warn("Cluster: RPC lock release timed out for {}", uuid);
+                                    }
+                                }
+                            }
+                        } else {
+                            NATSPlayerDataBridge.LOGGER.warn("Cluster: Rejected overlapping login for {} (Proxy Mode is disabled).", uuid);
+                        }
+                    }
+
+                    if (!locked) {
                         handler.disconnect(Component.literal(
                                 "§cCluster Error: Your session is locked on another server.\n§7Please wait a moment for the cluster to self-heal."));
                         return;

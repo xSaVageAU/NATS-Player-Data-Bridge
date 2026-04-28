@@ -23,6 +23,12 @@ public class PlayEvents {
             // If the server is stopping, the Lifecycle listener handles the final save.
             if (NATSPlayerDataBridge.isStopping()) return;
 
+            // Ignore players that were transferred via proxy RPC to avoid duplicate pushes
+            if (savage.natsplayerdata.session.SessionManager.TRANSFERRING_PLAYERS.remove(handler.getPlayer().getUUID())) {
+                NATSPlayerDataBridge.debugLog("Event: Player disconnected {}, skipping push (Proxy Transfer handled via RPC).", handler.getPlayer().getName().getString());
+                return;
+            }
+
             NATSPlayerDataBridge.debugLog("Event: Player disconnected {}, saving data and marking session as CLEAN...", handler.getPlayer().getName().getString());
             server.execute(() -> DataMergeService.prepareAndPush(handler.getPlayer(), server, true)); // Mark Clean
         });

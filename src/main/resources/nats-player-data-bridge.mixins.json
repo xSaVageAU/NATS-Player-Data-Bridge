@@ -4,7 +4,10 @@
 	"compatibilityLevel": "JAVA_25",
 	"mixins": [
 		"PlayerSyncMixin",
-		"SameServerGuardMixin"
+		"SameServerGuardMixin",
+		"TransferFreezeMixin$PacketListenerMixin",
+		"TransferFreezeMixin$PlayerCombatMixin",
+		"TransferFreezeMixin$ItemPickupMixin"
 	],
 	"injectors": {
 		"defaultRequire": 1

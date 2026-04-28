@@ -23,6 +23,13 @@ public class BridgeConfig {
     /** Whether to enable verbose debug logging. */
     public boolean debug = false;
 
+    /** 
+     * Whether the backend server is behind a proxy (e.g., Velocity).
+     * If true, enables RPC lock-stealing to allow seamless cross-server proxy switches.
+     * If false, immediately rejects overlapping logins to explicitly prevent dual-logins.
+     */
+    public boolean proxyMode = false;
+
     /** Whether to synchronize player statistics. */
     public boolean syncStats = true;
 
