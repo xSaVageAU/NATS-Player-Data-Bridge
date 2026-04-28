@@ -4,7 +4,8 @@ import net.fabricmc.fabric.api.networking.v1.ServerLoginConnectionEvents;
 import net.fabricmc.fabric.api.networking.v1.ServerConfigurationConnectionEvents;
 import net.minecraft.network.chat.Component;
 import savage.natsplayerdata.NATSPlayerDataBridge;
-import savage.natsplayerdata.SyncService;
+import savage.natsplayerdata.sync.SyncService;
+import savage.natsplayerdata.session.SessionManager;
 import savage.natsplayerdata.storage.DataStorage;
 import savage.natsplayerdata.storage.SessionStorage;
 import java.util.concurrent.CompletableFuture;
@@ -39,7 +40,7 @@ public class HandshakeEvents {
             CompletableFuture<Void> loginFuture = CompletableFuture.runAsync(() -> {
                 try {
                     // 1. Acquire Local Lock (with FAIL-TO-SAFETY)
-                    boolean locked = savage.natsplayerdata.SessionManager.tryAcquireLock(uuid);
+                    boolean locked = SessionManager.tryAcquireLock(uuid);
                     if (!locked) {
                         handler.disconnect(Component.literal(
                                 "§cCluster Error: Your session is locked on another server.\n§7Please wait a moment for the cluster to self-heal."));
@@ -61,7 +62,7 @@ public class HandshakeEvents {
 
                     // 3. Initiate Async Data Fetch
                     SyncService.requestAsyncFetch(uuid, backupRevision);
-                    savage.natsplayerdata.SessionManager.markLoginHandlerActive(handler);
+                    SessionManager.markLoginHandlerActive(handler);
 
                 } catch (Exception e) {
                     NATSPlayerDataBridge.LOGGER.error("Handshake Error for {}: {}", uuid, e.getMessage());
@@ -79,10 +80,10 @@ public class HandshakeEvents {
                 java.util.UUID uuid = handler.authenticatedProfile.id();
                 SyncService.consumePendingFetch(uuid);
 
-                if (!savage.natsplayerdata.SessionManager.isLoginHandlerActive(handler))
+                if (!SessionManager.isLoginHandlerActive(handler))
                     return;
 
-                savage.natsplayerdata.SessionManager.clearLoginHandler(handler);
+                SessionManager.clearLoginHandler(handler);
                 var entryOpt = SessionStorage.getInstance().fetchSession(uuid);
                 String localServerId = savage.natsfabric.NatsManager.getInstance().getServerName();
 
@@ -94,7 +95,7 @@ public class HandshakeEvents {
                                 "Event: Player disconnected during login {}, releasing orphaned lock...",
                                 handler.authenticatedProfile.name());
                         CompletableFuture.runAsync(
-                                () -> savage.natsplayerdata.SessionManager.setSessionState(uuid,
+                                () -> SessionManager.setSessionState(uuid,
                                         savage.natsplayerdata.model.PlayerState.CLEAN),
                                 savage.natsfabric.NatsManager.getInstance().getExecutor());
                     }
@@ -120,7 +121,7 @@ public class HandshakeEvents {
                                 "Event: Player disconnected during config-phase {}, releasing orphaned lock...",
                                 handler.getOwner().name());
                         CompletableFuture.runAsync(
-                                () -> savage.natsplayerdata.SessionManager.setSessionState(uuid,
+                                () -> SessionManager.setSessionState(uuid,
                                         savage.natsplayerdata.model.PlayerState.CLEAN),
                                 savage.natsfabric.NatsManager.getInstance().getExecutor());
                     }

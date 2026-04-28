@@ -1,10 +1,11 @@
-package savage.natsplayerdata;
+package savage.natsplayerdata.merge;
 
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.NbtIo;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.level.storage.LevelResource;
+import savage.natsplayerdata.NATSPlayerDataBridge;
 import savage.natsplayerdata.config.BridgeConfig;
 import savage.natsplayerdata.model.PlayerDataBundle;
 import savage.natsplayerdata.storage.DataStorage;
@@ -12,6 +13,7 @@ import savage.natsplayerdata.storage.SessionStorage;
 import savage.natsplayerdata.util.BundlePacker;
 import savage.natsplayerdata.util.LocalDiskIO;
 import savage.natsplayerdata.util.Serialization;
+import savage.natsplayerdata.sync.SyncService;
 
 import java.io.ByteArrayOutputStream;
 import java.util.Map;

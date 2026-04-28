@@ -5,7 +5,7 @@ import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
 import net.minecraft.commands.arguments.UuidArgument;
 import net.minecraft.network.chat.Component;
-import savage.natsplayerdata.SessionManager;
+import savage.natsplayerdata.session.SessionManager;
 import savage.natsplayerdata.model.PlayerState;
 import savage.natsplayerdata.storage.SessionStorage;
 

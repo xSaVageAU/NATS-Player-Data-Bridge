@@ -1,4 +1,4 @@
-package savage.natsplayerdata;
+package savage.natsplayerdata.session;
 
 import savage.natsplayerdata.model.PlayerState;
 import savage.natsplayerdata.model.SessionEntry;

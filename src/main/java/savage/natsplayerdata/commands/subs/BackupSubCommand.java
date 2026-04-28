@@ -9,8 +9,8 @@ import net.minecraft.commands.arguments.GameProfileArgument;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.MutableComponent;
 import net.minecraft.server.level.ServerPlayer;
-import savage.natsplayerdata.DataMergeService;
-import savage.natsplayerdata.SessionManager;
+import savage.natsplayerdata.merge.DataMergeService;
+import savage.natsplayerdata.session.SessionManager;
 import savage.natsplayerdata.backup.BackupManager;
 import savage.natsplayerdata.model.PlayerState;
 

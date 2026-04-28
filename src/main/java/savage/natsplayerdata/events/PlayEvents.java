@@ -2,7 +2,7 @@ package savage.natsplayerdata.events;
 
 import net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents;
 import savage.natsplayerdata.NATSPlayerDataBridge;
-import savage.natsplayerdata.DataMergeService;
+import savage.natsplayerdata.merge.DataMergeService;
 
 /**
  * Handles events that occurs while a player is in the 'Play' phase (actively in the world).
