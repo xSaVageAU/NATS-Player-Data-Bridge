@@ -32,7 +32,7 @@ public class DataMergeService {
      * 
      * @param markClean If true, marks the session as CLEAN in NATS.
      */
-    public static void prepareAndPush(ServerPlayer player, MinecraftServer server, boolean markClean) {
+    public static java.util.concurrent.CompletableFuture<Void> prepareAndPush(ServerPlayer player, MinecraftServer server, boolean markClean) {
         UUID uuid = player.getUUID();
         String playerName = player.getName().getString();
 
@@ -49,8 +49,8 @@ public class DataMergeService {
         Map<String, Object> stats = BundlePacker.captureStats(uuid, server);
         Map<String, Object> adv = BundlePacker.captureAdv(uuid, server);
 
-        // 3. Offload the heavy lifting to the Sync Service
-        SyncService.pushAsync(uuid, playerName, BundlePacker.captureBundle(uuid, playerName, nbt, stats, adv),
+        // 3. Offload the heavy lifting to the Sync Service and return the future
+        return SyncService.pushAsync(uuid, playerName, BundlePacker.captureBundle(uuid, playerName, nbt, stats, adv),
                 markClean);
     }
 

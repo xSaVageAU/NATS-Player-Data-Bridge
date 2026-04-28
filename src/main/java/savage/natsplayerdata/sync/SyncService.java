@@ -98,8 +98,8 @@ public class SyncService {
      * Handles the asynchronous push of a player bundle to NATS.
      * Implements strict cluster-wide fencing to prevent data overwrites.
      */
-    public static void pushAsync(UUID uuid, String playerName, PlayerDataBundle bundle, boolean markClean) {
-        CompletableFuture.runAsync(() -> {
+    public static CompletableFuture<Void> pushAsync(UUID uuid, String playerName, PlayerDataBundle bundle, boolean markClean) {
+        return CompletableFuture.runAsync(() -> {
             try {
                 // SESSION LOCK: STRICT PUSH GUARD
                 var entryOpt = SessionStorage.getInstance().fetchSession(uuid);

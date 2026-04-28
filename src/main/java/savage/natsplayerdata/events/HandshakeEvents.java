@@ -55,8 +55,7 @@ public class HandshakeEvents {
                                         var reply = conn.request("session.release." + owner, uuid.toString().getBytes(), java.time.Duration.ofSeconds(2));
                                         if (reply != null && "OK".equals(new String(reply.getData()))) {
                                             NATSPlayerDataBridge.LOGGER.info("Cluster: Lock released by {}, acquiring...", owner);
-                                            // Give the async CAS update a tiny window to settle in NATS
-                                            Thread.sleep(50);
+                                            // The OK reply guarantees the push is complete, so we can immediately acquire the lock
                                             locked = SessionManager.tryAcquireLock(uuid);
                                         }
                                     } catch (Exception ignored) {

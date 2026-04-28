@@ -42,15 +42,14 @@ public class SessionManager {
                     TRANSFERRING_PLAYERS.add(targetUuid);
                     
                     server.execute(() -> {
-                        // 1. Force a synchronous push from the main thread (capturing NBT safely)
-                        savage.natsplayerdata.merge.DataMergeService.prepareAndPush(player, server, true);
+                        // 1. Force a synchronous data capture and async push from the main thread
+                        savage.natsplayerdata.merge.DataMergeService.prepareAndPush(player, server, true).thenRun(() -> {
+                            // 2. Reply OK ONLY after the push finishes and the lock is CLEAN in NATS
+                            conn.publish(msg.getReplyTo(), "OK".getBytes());
+                        });
                         
-                        // 2. Reply OK immediately so the new server can proceed
-                        conn.publish(msg.getReplyTo(), "OK".getBytes());
-                        
-                        // 3. Fail-safe: If Velocity aborts the switch, unlock them after 5 seconds
+                        // 3. Fail-safe: If Velocity aborts the switch, unlock them after 5 seconds without sleeping a thread
                         java.util.concurrent.CompletableFuture.runAsync(() -> {
-                            try { Thread.sleep(5000); } catch (InterruptedException ignored) {}
                             server.execute(() -> {
                                 if (TRANSFERRING_PLAYERS.remove(targetUuid)) {
                                     // Re-acquire the lock for this server since the transfer failed
@@ -58,7 +57,7 @@ public class SessionManager {
                                     NATSPlayerDataBridge.LOGGER.warn("Cluster: Proxy transfer timed out for {}, reverted lock and unfroze.", player.getName().getString());
                                 }
                             });
-                        }, savage.natsplayerdata.storage.DataStorage.VIRTUAL_EXECUTOR);
+                        }, java.util.concurrent.CompletableFuture.delayedExecutor(5, java.util.concurrent.TimeUnit.SECONDS));
                     });
                 } else {
                     conn.publish(msg.getReplyTo(), "NOT_FOUND".getBytes());
