@@ -137,7 +137,7 @@ public class SyncService {
                 DataStorage.getInstance().pushBundle(bundle);
 
                 if (markClean) {
-                    SessionManager.setSessionState(uuid, savage.natsplayerdata.model.PlayerState.CLEAN);
+                    SessionManager.releaseLockSafely(uuid);
                 }
             } catch (Exception e) {
                 NATSPlayerDataBridge.LOGGER.error("Sync Error: Failed to push bundle for {}: {}", playerName,

@@ -18,6 +18,8 @@ public class SessionManager {
 
     private static final Set<ServerLoginPacketListenerImpl> ACTIVE_LOGIN_HANDLERS = ConcurrentHashMap.newKeySet();
     public static final Set<UUID> TRANSFERRING_PLAYERS = ConcurrentHashMap.newKeySet();
+    public static final java.util.Map<UUID, Long> TRANSFER_START_TIMES = new ConcurrentHashMap<>();
+    private static final java.util.concurrent.atomic.AtomicLong ATTEMPT_COUNTER = new java.util.concurrent.atomic.AtomicLong(0);
     private static Dispatcher rpcDispatcher;
 
     /**
@@ -38,7 +40,9 @@ public class SessionManager {
                 
                 var player = server.getPlayerList().getPlayer(targetUuid);
                 if (player != null) {
-                    // Tag the player so PlayEvents.DISCONNECT knows this is a proxy transfer
+                    // Start a new transfer attempt with a unique, monotonic ID
+                    long attemptId = ATTEMPT_COUNTER.incrementAndGet();
+                    TRANSFER_START_TIMES.put(targetUuid, attemptId);
                     TRANSFERRING_PLAYERS.add(targetUuid);
                     
                     server.execute(() -> {
@@ -48,16 +52,26 @@ public class SessionManager {
                             conn.publish(msg.getReplyTo(), "OK".getBytes());
                         });
                         
-                        // 3. Fail-safe: If Velocity aborts the switch, unlock them after 5 seconds without sleeping a thread
+                        // 3. Fail-safe: Only revert if THIS attempt is still the active one
                         java.util.concurrent.CompletableFuture.runAsync(() -> {
                             server.execute(() -> {
-                                if (TRANSFERRING_PLAYERS.remove(targetUuid)) {
-                                    // Re-acquire the lock for this server since the transfer failed
-                                    savage.natsplayerdata.session.SessionManager.setSessionState(targetUuid, savage.natsplayerdata.model.PlayerState.DIRTY);
-                                    NATSPlayerDataBridge.LOGGER.warn("Cluster: Proxy transfer timed out for {}, reverted lock and unfroze.", player.getName().getString());
+                                Long currentAttempt = TRANSFER_START_TIMES.get(targetUuid);
+                                if (currentAttempt != null && currentAttempt == attemptId) {
+                                    TRANSFER_START_TIMES.remove(targetUuid);
+                                    TRANSFERRING_PLAYERS.remove(targetUuid);
+                                    
+                                    var opt = SessionStorage.getInstance().fetchSession(targetUuid);
+                                    if (opt.isPresent() && opt.get().state().lastServer().equals(localServerId)) {
+                                        // Re-acquire the lock for this server since the transfer failed and we still own it
+                                        SessionState dirtyState = SessionState.create(targetUuid, savage.natsplayerdata.model.PlayerState.DIRTY, localServerId);
+                                        SessionStorage.getInstance().pushSession(dirtyState, opt.get().revision());
+                                        NATSPlayerDataBridge.LOGGER.warn("Cluster: Proxy transfer timed out for {}, reverted lock and unfroze.", player.getName().getString());
+                                    } else {
+                                        player.connection.disconnect(net.minecraft.network.chat.Component.literal("§cDisconnected by proxy transfer."));
+                                    }
                                 }
                             });
-                        }, java.util.concurrent.CompletableFuture.delayedExecutor(5, java.util.concurrent.TimeUnit.SECONDS));
+                        }, java.util.concurrent.CompletableFuture.delayedExecutor(15, java.util.concurrent.TimeUnit.SECONDS));
                     });
                 } else {
                     conn.publish(msg.getReplyTo(), "NOT_FOUND".getBytes());
@@ -111,6 +125,25 @@ public class SessionManager {
             newState = SessionState.create(uuid, state, localServerId);
         }
         SessionStorage.getInstance().pushSession(newState);
+    }
+
+    /**
+     * Safely transitions a DIRTY lock to CLEAN using CAS.
+     * Prevents race conditions where a delayed async task blindly overwrites a newly acquired lock.
+     */
+    public static void releaseLockSafely(UUID uuid) {
+        String localServerId = savage.natsfabric.NatsManager.getInstance().getServerName();
+        var opt = SessionStorage.getInstance().fetchSession(uuid);
+        if (opt.isPresent()) {
+            var entry = opt.get();
+            if (entry.state().lastServer().equals(localServerId) && entry.state().state() == PlayerState.DIRTY) {
+                SessionState cleanState = SessionState.create(uuid, PlayerState.CLEAN, localServerId);
+                boolean success = SessionStorage.getInstance().pushSession(cleanState, entry.revision());
+                if (!success) {
+                    NATSPlayerDataBridge.LOGGER.warn("Cluster: Safe lock release failed for {} (CAS mismatch).", uuid);
+                }
+            }
+        }
     }
 
     // --- Login Handler Tracking (Ensures clean cleanup during handshake failures) ---

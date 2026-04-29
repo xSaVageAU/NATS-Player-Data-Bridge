@@ -25,6 +25,7 @@ public class PlayEvents {
 
             // Ignore players that were transferred via proxy RPC to avoid duplicate pushes
             if (savage.natsplayerdata.session.SessionManager.TRANSFERRING_PLAYERS.remove(handler.getPlayer().getUUID())) {
+                savage.natsplayerdata.session.SessionManager.TRANSFER_START_TIMES.remove(handler.getPlayer().getUUID());
                 NATSPlayerDataBridge.debugLog("Event: Player disconnected {}, skipping push (Proxy Transfer handled via RPC).", handler.getPlayer().getName().getString());
                 return;
             }

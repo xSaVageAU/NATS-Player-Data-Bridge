@@ -122,8 +122,7 @@ public class HandshakeEvents {
                                 "Event: Player disconnected during login {}, releasing orphaned lock...",
                                 handler.authenticatedProfile.name());
                         CompletableFuture.runAsync(
-                                () -> SessionManager.setSessionState(uuid,
-                                        savage.natsplayerdata.model.PlayerState.CLEAN),
+                                () -> SessionManager.releaseLockSafely(uuid),
                                 savage.natsfabric.NatsManager.getInstance().getExecutor());
                     }
                 }
@@ -148,8 +147,7 @@ public class HandshakeEvents {
                                 "Event: Player disconnected during config-phase {}, releasing orphaned lock...",
                                 handler.getOwner().name());
                         CompletableFuture.runAsync(
-                                () -> SessionManager.setSessionState(uuid,
-                                        savage.natsplayerdata.model.PlayerState.CLEAN),
+                                () -> SessionManager.releaseLockSafely(uuid),
                                 savage.natsfabric.NatsManager.getInstance().getExecutor());
                     }
                 }

@@ -21,9 +21,11 @@ When a player leaves one server, their data is saved to a NATS Key-Value bucket.
 3. Configure `config/nats-fabric.yml` with your NATS server URL, auth token, and a unique name for this server.
 4. Restart.
 
-### Minimal NATS Server Config
+### Setting up the NATS Server
 
-```
+If you are running your own NATS server, create a new text file named `nats-server.conf` and paste the following minimal configuration into it:
+
+```hcl
 port: 4222
 
 authorization {
@@ -35,7 +37,9 @@ jetstream {
 }
 ```
 
-Start with `./nats-server -c nats-server.conf` on Linux/macOS or `nats-server.exe -c nats-server.conf` on Windows.
+Then, start your NATS server by pointing it to the configuration file you just created:
+- **Linux/macOS:** `./nats-server -c nats-server.conf`
+- **Windows:** `nats-server.exe -c nats-server.conf`
 
 ---
 
