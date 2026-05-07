@@ -66,8 +66,18 @@ public class NATSPlayerDataBridge implements ModInitializer {
 
 		// Register NATS-Fabric connection recovery hook
 		savage.natsfabric.event.NatsConnectionEvents.RECONNECTED.register((conn) -> {
-			LOGGER.info("Cluster: NATS connection RESTORED. Reconciling local vault...");
+			LOGGER.info("Cluster: NATS connection RESTORED. Re-arming RPC and reconciling local vault...");
+			
+			// 1. Re-arm RPC (Subscriptions likely died during disconnect)
+			if (SERVER != null) {
+				SERVER.execute(() -> savage.natsplayerdata.session.SessionManager.initRpcListener(SERVER));
+			}
+
+			// 2. Process any data saved during downtime
 			savage.natsplayerdata.storage.StorageLifecycleManager.getInstance().reconcileLocalVault();
+
+			// 3. Cleanup any remaining "Ghost Locks" (online during crash)
+			savage.natsplayerdata.storage.SessionStorage.getInstance().reconcileLocalSessions();
 		});
 
 		LOGGER.info("NATS Player Data Bridge: Binary CBOR engine ready.");

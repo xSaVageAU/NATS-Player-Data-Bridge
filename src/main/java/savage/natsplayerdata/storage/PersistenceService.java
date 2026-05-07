@@ -38,6 +38,13 @@ public class PersistenceService {
     }
 
     /**
+     * Checks if a specific player has a pending bundle in the vault.
+     */
+    public static boolean hasPendingSync(UUID uuid) {
+        return Files.exists(VAULT_PATH.resolve(uuid.toString() + ".cbor"));
+    }
+
+    /**
      * Checks if there are any pending bundles in the vault.
      */
     public static boolean hasPendingSyncs() {

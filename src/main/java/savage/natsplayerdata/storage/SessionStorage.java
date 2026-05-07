@@ -144,8 +144,15 @@ public class SessionStorage {
                         SessionState session = Serialization.JSON.readValue(entry.getValue(), SessionState.class);
                         
                         if (session.state() == PlayerState.DIRTY && localServerId.equals(session.lastServer())) {
+                            UUID uuid = session.uuid();
+                            
+                            // Check if this was a "Ghost Lock" (No local vault data = Hard Crash)
+                            if (!PersistenceService.hasPendingSync(uuid)) {
+                                NATSPlayerDataBridge.LOGGER.warn("Cluster: Detected unrecoverable desync for {}. Player was online during a hard crash; progress since last auto-save may be lost.", uuid);
+                            }
+
                             NATSPlayerDataBridge.debugLog("SessionStorage: Healing orphaned session for {}", key);
-                            pushSession(SessionState.create(session.uuid(), PlayerState.CLEAN, localServerId));
+                            pushSession(SessionState.create(uuid, PlayerState.CLEAN, localServerId));
                             fixedCount.incrementAndGet();
                         }
                     } catch (Exception e) {

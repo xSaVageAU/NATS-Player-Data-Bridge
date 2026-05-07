@@ -63,10 +63,6 @@ public class StorageLifecycleManager {
             // 3. Initialize Backup Storage (dedicated bucket)
             BackupStorage.getInstance().init(conn, backupBucket, backupHistory);
 
-            // 4. Perform session reconciliation (Heal orphaned locks)
-            NATSPlayerDataBridge.LOGGER.info("Cluster: Healing orphaned session locks...");
-            SessionStorage.getInstance().reconcileLocalSessions();
-
             ready.set(true);
             NATSPlayerDataBridge.LOGGER.info("Cluster: All storage buckets are READY.");
         } catch (Exception e) {
@@ -90,7 +86,14 @@ public class StorageLifecycleManager {
 
                         // Run post-init tasks on the server thread
                         server.execute(() -> {
+                            // 5. Re-arm RPC listeners for this server ID on the main thread
                             SessionManager.initRpcListener(server);
+
+                            // 6. Reconcile any data saved to the local vault during previous downtime
+                            reconcileLocalVault();
+
+                            // 7. Cleanup any remaining "Ghost Locks" (online during crash)
+                            SessionStorage.getInstance().reconcileLocalSessions();
                         });
                         return;
                     }
@@ -144,12 +147,6 @@ public class StorageLifecycleManager {
                     NATSPlayerDataBridge.LOGGER.error("Cluster: Vault reconciliation failed for {}: {}", uuid, e.getMessage());
                 }
             });
-            
-            // Re-arm RPC listeners for this server ID on the main thread
-            var server = NATSPlayerDataBridge.getServer();
-            if (server != null) {
-                server.execute(() -> SessionManager.initRpcListener(server));
-            }
         });
     }
 }
