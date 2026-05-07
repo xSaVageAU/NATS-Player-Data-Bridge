@@ -60,11 +60,22 @@ public class DataStorage {
         return kvBucket != null && NatsManager.getInstance().isConnected();
     }
 
+    private void ensureReady() {
+        if (kvBucket == null) {
+            throw new IllegalStateException("NATS DataStorage is NOT initialized. Was NATS reachable during startup?");
+        }
+    }
+
     /**
      * Serializes, compresses, and uploads a player bundle.
      */
     public void pushBundle(PlayerDataBundle bundle) {
-        if (kvBucket == null) return;
+        try {
+            ensureReady();
+        } catch (Exception e) {
+            NATSPlayerDataBridge.LOGGER.error("DataStorage: Cannot push bundle for {} - Storage not ready!", bundle.uuid());
+            return;
+        }
         try {
             byte[] cborBinary = Serialization.CBOR.writeValueAsBytes(bundle);
             
@@ -84,7 +95,12 @@ public class DataStorage {
      * Directly pushes a pre-compressed binary blob to the cluster.
      */
     public void pushRawBundle(UUID uuid, byte[] compressedBinary) {
-        if (kvBucket == null) return;
+        try {
+            ensureReady();
+        } catch (Exception e) {
+            NATSPlayerDataBridge.LOGGER.error("DataStorage: Cannot push raw bundle for {} - Storage not ready!", uuid);
+            return;
+        }
         try {
             kvBucket.put("bundle." + uuid.toString(), compressedBinary);
             NATSPlayerDataBridge.debugLog("DataStorage: Pushed raw binary bundle ({} bytes) for {}", compressedBinary.length, uuid);
@@ -97,7 +113,7 @@ public class DataStorage {
      * Fetches and deserializes a player bundle.
      */
     public Optional<PlayerDataBundle> fetchBundle(UUID uuid) {
-        if (kvBucket == null) return Optional.empty();
+        ensureReady();
         try {
             KeyValueEntry entry = kvBucket.get("bundle." + uuid.toString());
             if (entry == null || entry.getValue() == null) return Optional.empty();

@@ -67,7 +67,10 @@ public class BackupStorage {
      * Snapshots a player bundle into the historical bucket.
      */
     public boolean storeBackup(PlayerDataBundle bundle) {
-        if (!init()) return false;
+        if (!init()) {
+            NATSPlayerDataBridge.LOGGER.error("BackupStorage: Cannot store backup for {} - Storage failed to initialize!", bundle.uuid());
+            return false;
+        }
         try {
             byte[] cborBinary = Serialization.CBOR.writeValueAsBytes(bundle);
             byte[] compressedBinary = CompressionUtil.compress(cborBinary);
@@ -85,7 +88,10 @@ public class BackupStorage {
      * Lists available revisions for a player.
      */
     public List<KeyValueEntry> getHistory(UUID uuid) {
-        if (!init()) return Collections.emptyList();
+        if (!init()) {
+            NATSPlayerDataBridge.LOGGER.error("BackupStorage: Cannot get history for {} - Storage not ready!", uuid);
+            return Collections.emptyList();
+        }
         try {
             return backupBucket.history("backup." + uuid);
         } catch (Exception e) {
@@ -97,7 +103,10 @@ public class BackupStorage {
      * Fetches a specific historical revision entry.
      */
     public Optional<KeyValueEntry> getRevision(UUID uuid, long revision) {
-        if (!init()) return Optional.empty();
+        if (!init()) {
+            NATSPlayerDataBridge.LOGGER.error("BackupStorage: Cannot get revision {} for {} - Storage not ready!", revision, uuid);
+            return Optional.empty();
+        }
         try {
             return Optional.ofNullable(backupBucket.get("backup." + uuid, revision));
         } catch (Exception e) {

@@ -62,11 +62,17 @@ public class SessionStorage {
         return kvBucket != null && NatsManager.getInstance().isConnected();
     }
 
+    private void ensureReady() {
+        if (kvBucket == null) {
+            throw new IllegalStateException("NATS SessionStorage is NOT initialized. Check NATS connection status.");
+        }
+    }
+
     /**
      * Fetches current session lock state from NATS.
      */
     public Optional<SessionEntry> fetchSession(UUID uuid) {
-        if (kvBucket == null) return Optional.empty();
+        ensureReady();
         try {
             KeyValueEntry entry = kvBucket.get("session." + uuid.toString());
             if (entry == null || entry.getValue() == null) return Optional.empty();
@@ -84,7 +90,7 @@ public class SessionStorage {
      * If expectedRevision is > 0, it uses NATS Optimistic Concurrency (CAS).
      */
     public boolean pushSession(SessionState state, long expectedRevision) {
-        if (kvBucket == null) return false;
+        ensureReady();
         try {
             byte[] json = Serialization.JSON.writeValueAsBytes(state);
             String key = "session." + state.uuid().toString();
@@ -118,7 +124,12 @@ public class SessionStorage {
      * Scans for any DIRTY sessions owned by the local server ID and resets them to CLEAN.
      */
     public void reconcileLocalSessions() {
-        if (kvBucket == null) return;
+        try {
+            ensureReady();
+        } catch (Exception e) {
+            NATSPlayerDataBridge.LOGGER.error("SessionStorage: Cannot reconcile sessions - Storage not ready!");
+            return;
+        }
         String localServerId = NatsManager.getInstance().getServerName();
         NATSPlayerDataBridge.LOGGER.info("SessionStorage: Starting parallel session reconciliation for server '{}'...", localServerId);
 
@@ -163,7 +174,12 @@ public class SessionStorage {
      */
     public List<SessionEntry> getAllSessions() {
         List<SessionEntry> sessions = new ArrayList<>();
-        if (kvBucket == null) return sessions;
+        try {
+            ensureReady();
+        } catch (Exception e) {
+            NATSPlayerDataBridge.LOGGER.error("SessionStorage: Cannot list sessions - Storage not ready!");
+            return sessions;
+        }
 
         try {
             for (String key : kvBucket.keys("session.*")) {
