@@ -1,8 +1,8 @@
 # NATS Player Data Bridge
 
-A server-side Fabric mod that synchronizes player inventories, ender chest contents, health, hunger, XP, active effects, statistics, and advancements across multiple Minecraft servers in a cluster using [NATS JetStream](https://nats.io).
+A server-side Fabric mod that synchronizes player inventories, ender chests, health, XP, statistics, and advancements across multiple Minecraft servers using [NATS JetStream](https://nats.io).
 
-When a player leaves one server, their data is saved to a NATS Key-Value bucket. When they join another server in the same cluster, that data is fetched and applied before they spawn in.
+When a player leaves, their data is saved to a NATS Key-Value bucket. When they join another server in the same cluster, that data is fetched and applied before they spawn.
 
 ---
 
@@ -65,18 +65,6 @@ If you are also using [FabricProxy-Lite](https://modrinth.com/mod/fabricproxy-li
 | `filterKeys` | Inventory, health, XP, etc. | The NBT keys to include or exclude depending on filterMode. |
 | `backupHistoryCount` | `20` | The number of historical snapshots to keep per player in the backup bucket. |
 
-## High Availability & Resilience
-
-The bridge is designed for production environments where network stability is critical:
-
-- **Zero-Loss Vaulting:** If NATS is down, player data is saved to a local disk vault (`pending_sync/`) and automatically synced back to the cluster upon reconnection.
-- **Atomic Self-Healing:** Servers perform a multi-stage recovery on startup and reconnection to reconcile orphaned locks and clear local vaults.
-- **Readiness Gating:** Servers stay in an "Initializing" state (blocking joins) until all background healing and synchronization is 100% complete.
-- **Stale Data Protection:** Intelligent timestamp comparison prevents an old server from overwriting newer cluster data during recovery.
-- **Infinite Watchdog:** A hardened networking layer that performs automatic, infinite reconnection retries without impacting server stability.
-
----
-
 ## Admin Commands
 
 All commands require operator permissions.
@@ -88,16 +76,23 @@ All commands require operator permissions.
 | `/nats sessions clean <uuid>` | Clear a stuck session lock for a specific player. |
 | `/nats backup push <player>` | Create a long-term snapshot of a player's current data. |
 | `/nats backup list <player>` | View available snapshots for a player. |
-| `/nats backup restore <player> <rev>` | Restore a specific snapshot. If the player is online they will be kicked, and the backup will be applied when they next log in. |
+| `/nats backup restore <player> <rev>` | Stage a restoration. **Requires `/nats backup confirm` to execute.** |
+| `/nats backup confirm` | Execute a staged restoration. The player will be kicked to apply data safely. |
 
 ---
 
-## Data Handling Notes
+## Data Handling & Resilience
 
-- **Cluster-Wide Locking:** Each player session is assigned a unique lock. A server can only write data if it holds that lock, preventing data corruption from racing servers.
-- **Background Operations:** All push/pull operations run on a dedicated virtual-thread executor to ensure zero impact on server TPS.
-- **Binary Format:** Data is packed into a compact CBOR binary format, minimizing network overhead and disk usage.
-- **Rollbacks:** Admins can restore players to previous snapshots. If the player is online, they are automatically kicked to apply the data safely.
+The bridge is built for production environments where data integrity and network stability are critical.
+
+- **Cluster-Wide Locking:** Each player session is assigned a unique lock. A server can only write data if it holds that lock, preventing corruption from racing servers.
+- **Fail-to-Safety (Vaulting):** If NATS is unreachable, player data is saved to a local disk vault (`nats-player-data-bridge/pending_sync/`) and automatically synced back when the connection is restored.
+- **Self-Healing:** Servers perform an atomic recovery on startup to reconcile orphaned locks and clear any local vault data.
+- **Background Processing:** All network operations run on dedicated virtual threads to ensure zero impact on server TPS.
+- **Binary Format:** Data is packed into a compact CBOR binary format with Zstd compression for minimal network overhead.
+- **Stale Data Protection:** Intelligent timestamping prevents old data from overwriting newer progress during cluster recovery.
+- **Readiness Gating:** Servers block player joins until background synchronization and healing are 100% complete.
+- **Infinite Watchdog:** The networking layer performs automatic reconnection retries without impacting stability.
 
 ---
 

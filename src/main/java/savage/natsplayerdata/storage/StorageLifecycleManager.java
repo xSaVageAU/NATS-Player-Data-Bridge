@@ -82,7 +82,7 @@ public class StorageLifecycleManager {
         VIRTUAL_EXECUTOR.execute(() -> {
             NATSPlayerDataBridge.LOGGER.info("Cluster: Starting async storage watchdog...");
             int attempts = 0;
-            while (!ready.get() && attempts < 30) {
+            while (!ready.get()) {
                 try {
                     var conn = savage.natsfabric.NatsManager.getInstance().getConnection();
                     if (conn != null && conn.getStatus() == Connection.Status.CONNECTED) {
@@ -101,16 +101,17 @@ public class StorageLifecycleManager {
                 } catch (Exception ignored) {}
 
                 attempts++;
+                // Log a warning every ~30 seconds (15 attempts * 2s) to keep logs clean but informative
+                if (attempts % 15 == 0) {
+                    NATSPlayerDataBridge.LOGGER.warn("Cluster: Still waiting for NATS connection to initialize storage... (Attempt {})", attempts);
+                }
+
                 try {
                     TimeUnit.SECONDS.sleep(2);
                 } catch (InterruptedException e) {
                     Thread.currentThread().interrupt();
                     return;
                 }
-            }
-
-            if (!ready.get()) {
-                NATSPlayerDataBridge.LOGGER.error("Cluster: FATAL - Storage initialization TIMED OUT after 60s. The bridge will NOT be active.");
             }
         });
     }
