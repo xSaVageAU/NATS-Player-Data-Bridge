@@ -71,7 +71,9 @@ public class SessionManager {
                                     }
                                 }
                             });
-                        }, java.util.concurrent.CompletableFuture.delayedExecutor(15, java.util.concurrent.TimeUnit.SECONDS));
+                        }, java.util.concurrent.CompletableFuture.delayedExecutor(
+                                NATSPlayerDataBridge.getConfig() != null ? NATSPlayerDataBridge.getConfig().rpcTimeoutSeconds : 15, 
+                                java.util.concurrent.TimeUnit.SECONDS));
                     });
                 } else {
                     conn.publish(msg.getReplyTo(), "NOT_FOUND".getBytes());

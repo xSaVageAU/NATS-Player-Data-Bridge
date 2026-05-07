@@ -58,6 +58,7 @@ If you are also using [FabricProxy-Lite](https://modrinth.com/mod/fabricproxy-li
 | Key | Default | Description |
 |---|---|---|
 | `proxyMode` | `false` | Enable RPC lock handoff for Velocity proxy setups. |
+| `rpcTimeoutSeconds` | `15` | The timeout in seconds for cross-server RPC requests (e.g., during proxy transfers). |
 | `syncStats` | `true` | Sync player statistics. |
 | `syncAdvancements` | `true` | Sync advancements. |
 | `filterMode` | `"whitelist"` | `"whitelist"` syncs only listed NBT keys. `"blacklist"` syncs everything except listed keys. |

@@ -30,6 +30,9 @@ public class BridgeConfig {
      */
     public boolean proxyMode = false;
 
+    /** The timeout in seconds for cross-server RPC requests (e.g., during proxy transfers). */
+    public int rpcTimeoutSeconds = 15;
+
     /** Whether to synchronize player statistics. */
     public boolean syncStats = true;
 
