@@ -26,24 +26,17 @@ public class BackupStorage {
     }
 
     private BackupStorage() {
-        init();
+        // Initialization is now managed by StorageLifecycleManager
     }
 
     public static BackupStorage getInstance() {
         return Holder.INSTANCE;
     }
 
-    public synchronized boolean init() {
+    public synchronized boolean init(io.nats.client.Connection conn, String bucketName, int historyCount) {
         if (backupBucket != null) return true;
 
-        String bucketName = NATSPlayerDataBridge.getConfig() != null && NATSPlayerDataBridge.getConfig().backupBucketName != null 
-                ? NATSPlayerDataBridge.getConfig().backupBucketName : "player-backups-v1";
-        int historyCount = NATSPlayerDataBridge.getConfig() != null ? NATSPlayerDataBridge.getConfig().backupHistoryCount : 20;
-
         try {
-            var conn = NatsManager.getInstance().getConnection();
-            if (conn == null) return false;
-
             try {
                 backupBucket = conn.keyValue(bucketName);
                 return true;
@@ -54,21 +47,29 @@ public class BackupStorage {
                         .maxHistoryPerKey(historyCount)
                         .build());
                 backupBucket = conn.keyValue(bucketName);
-                NATSPlayerDataBridge.LOGGER.info("BackupStorage: Created persistent backup bucket '{}'", bucketName);
+                NATSPlayerDataBridge.LOGGER.info("BackupStorage: Created persistent backup bucket '{}' (History: {})", bucketName, historyCount);
                 return true;
             }
         } catch (Exception e) {
-            NATSPlayerDataBridge.LOGGER.error("BackupStorage: Initialization failed: {}", e.getMessage());
+            NATSPlayerDataBridge.LOGGER.error("BackupStorage: Failed to initialize NATS bucket '{}': {}", bucketName, e.getMessage());
         }
         return false;
+    }
+
+    private void ensureReady() {
+        if (backupBucket == null) {
+            throw new IllegalStateException("NATS BackupStorage is NOT initialized.");
+        }
     }
 
     /**
      * Snapshots a player bundle into the historical bucket.
      */
     public boolean storeBackup(PlayerDataBundle bundle) {
-        if (!init()) {
-            NATSPlayerDataBridge.LOGGER.error("BackupStorage: Cannot store backup for {} - Storage failed to initialize!", bundle.uuid());
+        try {
+            ensureReady();
+        } catch (Exception e) {
+            NATSPlayerDataBridge.LOGGER.error("BackupStorage: Cannot store backup for {} - Storage not ready!", bundle.uuid());
             return false;
         }
         try {
@@ -88,7 +89,9 @@ public class BackupStorage {
      * Lists available revisions for a player.
      */
     public List<KeyValueEntry> getHistory(UUID uuid) {
-        if (!init()) {
+        try {
+            ensureReady();
+        } catch (Exception e) {
             NATSPlayerDataBridge.LOGGER.error("BackupStorage: Cannot get history for {} - Storage not ready!", uuid);
             return Collections.emptyList();
         }
@@ -103,7 +106,9 @@ public class BackupStorage {
      * Fetches a specific historical revision entry.
      */
     public Optional<KeyValueEntry> getRevision(UUID uuid, long revision) {
-        if (!init()) {
+        try {
+            ensureReady();
+        } catch (Exception e) {
             NATSPlayerDataBridge.LOGGER.error("BackupStorage: Cannot get revision {} for {} - Storage not ready!", revision, uuid);
             return Optional.empty();
         }

@@ -27,21 +27,17 @@ public class DataStorage {
     }
 
     private DataStorage() {
-        init();
+        // Initialization is now managed by StorageLifecycleManager
     }
 
     public static DataStorage getInstance() {
         return Holder.INSTANCE;
     }
 
-    private void init() {
-        String bucketName = NATSPlayerDataBridge.getConfig() != null && NATSPlayerDataBridge.getConfig().dataBucketName != null 
-                ? NATSPlayerDataBridge.getConfig().dataBucketName : "player-sync-v1";
+    public void init(io.nats.client.Connection conn, String bucketName) {
+        if (kvBucket != null) return;
 
         try {
-            var conn = NatsManager.getInstance().getConnection();
-            if (conn == null) return;
-
             try {
                 kvBucket = conn.keyValue(bucketName);
             } catch (Exception e) {
@@ -52,7 +48,7 @@ public class DataStorage {
                 kvBucket = conn.keyValue(bucketName);
             }
         } catch (Exception e) {
-            NATSPlayerDataBridge.LOGGER.error("DataStorage: Failed to initialize NATS bucket: {}", e.getMessage());
+            NATSPlayerDataBridge.LOGGER.error("DataStorage: Failed to initialize NATS bucket '{}': {}", bucketName, e.getMessage());
         }
     }
 
