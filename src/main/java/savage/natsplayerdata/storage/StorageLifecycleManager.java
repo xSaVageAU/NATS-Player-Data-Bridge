@@ -19,6 +19,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 public class StorageLifecycleManager {
 
     private final AtomicBoolean ready = new AtomicBoolean(false);
+    private final AtomicBoolean reconciling = new AtomicBoolean(false);
     public static final ExecutorService VIRTUAL_EXECUTOR = Executors.newVirtualThreadPerTaskExecutor();
 
     private static final class Holder {
@@ -29,8 +30,11 @@ public class StorageLifecycleManager {
         return Holder.INSTANCE;
     }
 
+    /**
+     * @return True if the bridge is fully initialized and NATS is connected.
+     */
     public boolean isReady() {
-        return ready.get() && savage.natsfabric.NatsManager.getInstance().isConnected();
+        return ready.get() && !reconciling.get() && savage.natsfabric.NatsManager.getInstance().isConnected();
     }
 
     /**
@@ -89,11 +93,8 @@ public class StorageLifecycleManager {
                             // 5. Re-arm RPC listeners for this server ID on the main thread
                             SessionManager.initRpcListener(server);
 
-                            // 6. Reconcile any data saved to the local vault during previous downtime
+                            // 6. Perform unified healing (Vault + Ghost Locks)
                             reconcileLocalVault();
-
-                            // 7. Cleanup any remaining "Ghost Locks" (online during crash)
-                            SessionStorage.getInstance().reconcileLocalSessions();
                         });
                         return;
                     }
@@ -118,35 +119,54 @@ public class StorageLifecycleManager {
      * Fired when the NATS connection is restored.
      */
     public void reconcileLocalVault() {
+        if (reconciling.get()) return;
+        
+        reconciling.set(true);
         VIRTUAL_EXECUTOR.execute(() -> {
-            // Wait a moment for JetStream to fully stabilize
-            try { TimeUnit.SECONDS.sleep(1); } catch (InterruptedException ignored) {}
+            try {
+                // Wait a moment for JetStream to fully stabilize
+                try { TimeUnit.SECONDS.sleep(1); } catch (InterruptedException ignored) {}
 
-            if (!isReady()) return;
+                if (!savage.natsfabric.NatsManager.getInstance().isConnected()) return;
 
-            NATSPlayerDataBridge.LOGGER.info("Cluster: Reconciling local vault - Syncing pending bundles...");
+                NATSPlayerDataBridge.LOGGER.info("Cluster: Reconciling local vault - Syncing pending bundles...");
 
-            PersistenceService.getPendingUUIDs().forEach(uuid -> {
-                // Safety: If the player is online on THIS server, skip the stale vault file.
-                // Their live session will perform a fresh push when they disconnect.
-                var server = NATSPlayerDataBridge.getServer();
-                if (server != null && server.getPlayerList().getPlayer(uuid) != null) {
-                    NATSPlayerDataBridge.debugLog("Cluster: Skipping vault sync for {} - Player is currently online.", uuid);
-                    return;
-                }
-
-                try {
-                    var bundle = PersistenceService.consumeFromVault(uuid);
-                    if (bundle != null) {
-                        // Push the captured bundle and release the lock
-                        // Using UUID as the name fallback since the bundle record doesn't store the string name.
-                        savage.natsplayerdata.sync.SyncService.pushAsync(uuid, uuid.toString(), bundle, true);
-                        NATSPlayerDataBridge.LOGGER.info("Cluster: Local vault successfully restored data and released lock for {}.", uuid);
+                PersistenceService.getPendingUUIDs().forEach(uuid -> {
+                    // Safety: If the player is online on THIS server, skip the stale vault file.
+                    // Their live session will perform a fresh push when they disconnect.
+                    var server = NATSPlayerDataBridge.getServer();
+                    if (server != null && server.getPlayerList().getPlayer(uuid) != null) {
+                        NATSPlayerDataBridge.debugLog("Cluster: Skipping vault sync for {} - Player is currently online.", uuid);
+                        return;
                     }
-                } catch (Exception e) {
-                    NATSPlayerDataBridge.LOGGER.error("Cluster: Vault reconciliation failed for {}: {}", uuid, e.getMessage());
-                }
-            });
+
+                    try {
+                        var bundle = PersistenceService.consumeFromVault(uuid);
+                        if (bundle != null) {
+                            // STALE CHECK: Ensure we don't overwrite newer NATS data with an old vault file
+                            var currentNatsOpt = savage.natsplayerdata.storage.DataStorage.getInstance().fetchBundle(uuid);
+                            if (currentNatsOpt.isPresent() && currentNatsOpt.get().timestamp() > bundle.timestamp()) {
+                                NATSPlayerDataBridge.LOGGER.warn("Cluster: Discarding stale vault data for {} - NATS already has newer progress ({} vs {}).", 
+                                    uuid, currentNatsOpt.get().timestamp(), bundle.timestamp());
+                                return;
+                            }
+
+                            // Push the captured bundle and release the lock
+                            savage.natsplayerdata.sync.SyncService.pushAsync(uuid, uuid.toString(), bundle, true);
+                            NATSPlayerDataBridge.LOGGER.info("Cluster: Local vault successfully restored data and released lock for {}.", uuid);
+                        }
+                    } catch (Exception e) {
+                        NATSPlayerDataBridge.LOGGER.error("Cluster: Vault reconciliation failed for {}: {}", uuid, e.getMessage());
+                    }
+                });
+
+                // Phase 2: Cleanup any remaining "Ghost Locks" (online during crash)
+                savage.natsplayerdata.storage.SessionStorage.getInstance().reconcileLocalSessions();
+
+            } finally {
+                reconciling.set(false);
+                NATSPlayerDataBridge.LOGGER.info("Cluster: Reconciliation complete. Bridge is now READY.");
+            }
         });
     }
 }

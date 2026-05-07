@@ -75,15 +75,17 @@ public class PersistenceService {
 
     /**
      * Loads a bundle from the vault and deletes the file.
+     * Deletion is performed in a finally block to ensure no "Poison Files" cause infinite loops.
      */
     public static PlayerDataBundle consumeFromVault(UUID uuid) throws IOException {
         Path file = VAULT_PATH.resolve(uuid.toString() + ".cbor");
         if (!Files.exists(file)) return null;
 
-        byte[] data = Files.readAllBytes(file);
-        PlayerDataBundle bundle = Serialization.CBOR.readValue(data, PlayerDataBundle.class);
-        
-        Files.delete(file);
-        return bundle;
+        try {
+            byte[] data = Files.readAllBytes(file);
+            return Serialization.CBOR.readValue(data, PlayerDataBundle.class);
+        } finally {
+            Files.deleteIfExists(file);
+        }
     }
 }

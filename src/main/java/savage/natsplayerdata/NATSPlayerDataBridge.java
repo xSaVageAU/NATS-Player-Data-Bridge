@@ -73,11 +73,8 @@ public class NATSPlayerDataBridge implements ModInitializer {
 				SERVER.execute(() -> savage.natsplayerdata.session.SessionManager.initRpcListener(SERVER));
 			}
 
-			// 2. Process any data saved during downtime
+			// 2. Perform unified healing (Vault + Ghost Locks)
 			savage.natsplayerdata.storage.StorageLifecycleManager.getInstance().reconcileLocalVault();
-
-			// 3. Cleanup any remaining "Ghost Locks" (online during crash)
-			savage.natsplayerdata.storage.SessionStorage.getInstance().reconcileLocalSessions();
 		});
 
 		LOGGER.info("NATS Player Data Bridge: Binary CBOR engine ready.");

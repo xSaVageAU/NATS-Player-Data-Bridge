@@ -31,6 +31,13 @@ public class SessionManager {
         var conn = savage.natsfabric.NatsManager.getInstance().getConnection();
         if (conn == null) return;
 
+        // Cleanup existing dispatcher to prevent duplicate listeners on reconnect
+        if (rpcDispatcher != null) {
+            try {
+                conn.closeDispatcher(rpcDispatcher);
+            } catch (Exception ignored) {}
+        }
+
         rpcDispatcher = conn.createDispatcher((msg) -> {
             try {
                 String uuidStr = new String(msg.getData());
