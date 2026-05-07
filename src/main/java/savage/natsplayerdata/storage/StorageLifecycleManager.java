@@ -110,4 +110,46 @@ public class StorageLifecycleManager {
             }
         });
     }
+    /**
+     * Reconciles any pending data in the local vault and restores cluster consistency.
+     * Fired when the NATS connection is restored.
+     */
+    public void reconcileLocalVault() {
+        VIRTUAL_EXECUTOR.execute(() -> {
+            // Wait a moment for JetStream to fully stabilize
+            try { TimeUnit.SECONDS.sleep(1); } catch (InterruptedException ignored) {}
+
+            if (!isReady()) return;
+
+            NATSPlayerDataBridge.LOGGER.info("Cluster: Reconciling local vault - Syncing pending bundles...");
+
+            PersistenceService.getPendingUUIDs().forEach(uuid -> {
+                // Safety: If the player is online on THIS server, skip the stale vault file.
+                // Their live session will perform a fresh push when they disconnect.
+                var server = NATSPlayerDataBridge.getServer();
+                if (server != null && server.getPlayerList().getPlayer(uuid) != null) {
+                    NATSPlayerDataBridge.debugLog("Cluster: Skipping vault sync for {} - Player is currently online.", uuid);
+                    return;
+                }
+
+                try {
+                    var bundle = PersistenceService.consumeFromVault(uuid);
+                    if (bundle != null) {
+                        // Push the captured bundle and release the lock
+                        // Using UUID as the name fallback since the bundle record doesn't store the string name.
+                        savage.natsplayerdata.sync.SyncService.pushAsync(uuid, uuid.toString(), bundle, true);
+                        NATSPlayerDataBridge.LOGGER.info("Cluster: Local vault successfully restored data and released lock for {}.", uuid);
+                    }
+                } catch (Exception e) {
+                    NATSPlayerDataBridge.LOGGER.error("Cluster: Vault reconciliation failed for {}: {}", uuid, e.getMessage());
+                }
+            });
+            
+            // Re-arm RPC listeners for this server ID on the main thread
+            var server = NATSPlayerDataBridge.getServer();
+            if (server != null) {
+                server.execute(() -> SessionManager.initRpcListener(server));
+            }
+        });
+    }
 }
