@@ -48,10 +48,17 @@ public class DataMergeService {
 
         Map<String, Object> stats = BundlePacker.captureStats(uuid, server);
         Map<String, Object> adv = BundlePacker.captureAdv(uuid, server);
+        PlayerDataBundle bundle = BundlePacker.captureBundle(uuid, playerName, nbt, stats, adv);
 
-        // 3. Offload the heavy lifting to the Sync Service and return the future
-        return SyncService.pushAsync(uuid, playerName, BundlePacker.captureBundle(uuid, playerName, nbt, stats, adv),
-                markClean);
+        // 3. NATS DIVERSION: If NATS is down, save to the local vault instead of trying to push
+        if (!savage.natsplayerdata.storage.StorageLifecycleManager.getInstance().isReady()) {
+            NATSPlayerDataBridge.LOGGER.warn("Cluster: NATS is offline. Diverting sync for {} to local vault.", playerName);
+            savage.natsplayerdata.storage.PersistenceService.saveToVault(uuid, bundle);
+            return java.util.concurrent.CompletableFuture.completedFuture(null);
+        }
+
+        // 4. Offload the heavy lifting to the Sync Service and return the future
+        return SyncService.pushAsync(uuid, playerName, bundle, markClean);
     }
 
     /**
