@@ -130,6 +130,7 @@ public class StorageLifecycleManager {
                 if (!savage.natsfabric.NatsManager.getInstance().isConnected()) return;
 
                 NATSPlayerDataBridge.LOGGER.info("Cluster: Reconciling local vault - Syncing pending bundles...");
+                java.util.Set<java.util.UUID> recovered = new java.util.HashSet<>();
 
                 PersistenceService.getPendingUUIDs().forEach(uuid -> {
                     // Safety: If the player is online on THIS server, skip the stale vault file.
@@ -154,6 +155,7 @@ public class StorageLifecycleManager {
                             // Push the captured bundle and release the lock
                             savage.natsplayerdata.sync.SyncService.pushAsync(uuid, uuid.toString(), bundle, true);
                             NATSPlayerDataBridge.LOGGER.info("Cluster: Local vault successfully restored data and released lock for {}.", uuid);
+                            recovered.add(uuid);
                         }
                     } catch (Exception e) {
                         NATSPlayerDataBridge.LOGGER.error("Cluster: Vault reconciliation failed for {}: {}", uuid, e.getMessage());
@@ -161,7 +163,7 @@ public class StorageLifecycleManager {
                 });
 
                 // Phase 2: Cleanup any remaining "Ghost Locks" (online during crash)
-                savage.natsplayerdata.storage.SessionStorage.getInstance().reconcileLocalSessions();
+                savage.natsplayerdata.storage.SessionStorage.getInstance().reconcileLocalSessions(recovered);
 
             } finally {
                 reconciling.set(false);

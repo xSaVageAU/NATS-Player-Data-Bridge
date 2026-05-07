@@ -119,6 +119,10 @@ public class SessionStorage {
      * Scans for any DIRTY sessions owned by the local server ID and resets them to CLEAN.
      */
     public void reconcileLocalSessions() {
+        reconcileLocalSessions(java.util.Collections.emptySet());
+    }
+
+    public void reconcileLocalSessions(java.util.Set<UUID> recovered) {
         try {
             ensureReady();
         } catch (Exception e) {
@@ -153,14 +157,20 @@ public class SessionStorage {
                                 return;
                             }
 
+                            // COORDINATION: If we just recovered this player in Phase 1, skip them here.
+                            // Their async push is already in progress and will release the lock safely.
+                            if (recovered.contains(uuid)) {
+                                NATSPlayerDataBridge.debugLog("SessionStorage: Skipping lock cleanup for {} - Already handled by vault sync.", uuid);
+                                return;
+                            }
+
                             // COORDINATION: If a vault file exists, we SKIP the cleanup here.
-                            // The background 'reconcileLocalVault' task will push the data and release the lock properly.
                             if (PersistenceService.hasPendingSync(uuid)) {
                                 NATSPlayerDataBridge.debugLog("SessionStorage: Skipping lock cleanup for {} - Vault sync is pending.", uuid);
                                 return;
                             }
 
-                            // If we reach here, it's a "Ghost Lock" (Hard Crash with no vault data)
+                            // If we reach here, it's a true "Ghost Lock"
                             NATSPlayerDataBridge.LOGGER.warn("Cluster: Detected unrecoverable desync for {}. Player was online during a hard crash; progress since last auto-save may be lost.", uuid);
                             
                             NATSPlayerDataBridge.debugLog("SessionStorage: Healing orphaned session for {}", key);
