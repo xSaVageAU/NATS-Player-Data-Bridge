@@ -153,11 +153,16 @@ public class SessionStorage {
                                 return;
                             }
 
-                            // Check if this was a "Ghost Lock" (No local vault data = Hard Crash)
-                            if (!PersistenceService.hasPendingSync(uuid)) {
-                                NATSPlayerDataBridge.LOGGER.warn("Cluster: Detected unrecoverable desync for {}. Player was online during a hard crash; progress since last auto-save may be lost.", uuid);
+                            // COORDINATION: If a vault file exists, we SKIP the cleanup here.
+                            // The background 'reconcileLocalVault' task will push the data and release the lock properly.
+                            if (PersistenceService.hasPendingSync(uuid)) {
+                                NATSPlayerDataBridge.debugLog("SessionStorage: Skipping lock cleanup for {} - Vault sync is pending.", uuid);
+                                return;
                             }
 
+                            // If we reach here, it's a "Ghost Lock" (Hard Crash with no vault data)
+                            NATSPlayerDataBridge.LOGGER.warn("Cluster: Detected unrecoverable desync for {}. Player was online during a hard crash; progress since last auto-save may be lost.", uuid);
+                            
                             NATSPlayerDataBridge.debugLog("SessionStorage: Healing orphaned session for {}", key);
                             pushSession(SessionState.create(uuid, PlayerState.CLEAN, localServerId));
                             fixedCount.incrementAndGet();
