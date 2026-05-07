@@ -78,19 +78,22 @@ public class BridgeConfig {
      * Loads the config from disk, or creates a default one if it doesn't exist.
      */
     public static BridgeConfig load() {
+        BridgeConfig config;
         if (!Files.exists(CONFIG_PATH)) {
-            BridgeConfig defaults = new BridgeConfig();
-            defaults.save();
-            return defaults;
+            config = new BridgeConfig();
+        } else {
+            try (var reader = Files.newBufferedReader(CONFIG_PATH)) {
+                config = GSON.fromJson(reader, BridgeConfig.class);
+                if (config == null) config = new BridgeConfig();
+            } catch (IOException e) {
+                NATSPlayerDataBridge.LOGGER.error("[BridgeConfig] Failed to load config", e);
+                config = new BridgeConfig();
+            }
         }
 
-        try (var reader = Files.newBufferedReader(CONFIG_PATH)) {
-            BridgeConfig config = GSON.fromJson(reader, BridgeConfig.class);
-            return config != null ? config : new BridgeConfig();
-        } catch (IOException e) {
-            NATSPlayerDataBridge.LOGGER.error("[BridgeConfig] Failed to load config", e);
-            return new BridgeConfig();
-        }
+        // Always save back to disk to ensure any new fields are added to the file
+        config.save();
+        return config;
     }
 
     public void save() {
