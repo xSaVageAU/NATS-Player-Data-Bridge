@@ -22,7 +22,6 @@ import java.util.concurrent.atomic.AtomicInteger;
 public class SessionStorage {
 
     private KeyValue kvBucket;
-    public static final ExecutorService VIRTUAL_EXECUTOR = Executors.newVirtualThreadPerTaskExecutor();
 
     private static final class Holder {
         private static final SessionStorage INSTANCE = new SessionStorage();
@@ -152,7 +151,7 @@ public class SessionStorage {
                     } catch (Exception e) {
                         NATSPlayerDataBridge.LOGGER.warn("SessionStorage: Failed to process key '{}' during reconciliation: {}", key, e.getMessage());
                     }
-                }, VIRTUAL_EXECUTOR));
+                }, StorageLifecycleManager.VIRTUAL_EXECUTOR));
             }
 
             CompletableFuture.allOf(futures.toArray(new CompletableFuture[0])).join();

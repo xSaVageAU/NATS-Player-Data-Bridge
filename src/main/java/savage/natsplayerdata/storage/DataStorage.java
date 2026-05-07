@@ -20,7 +20,6 @@ import java.util.concurrent.Executors;
 public class DataStorage {
 
     private KeyValue kvBucket;
-    public static final ExecutorService VIRTUAL_EXECUTOR = Executors.newVirtualThreadPerTaskExecutor();
 
     private static final class Holder {
         private static final DataStorage INSTANCE = new DataStorage();
@@ -132,6 +131,6 @@ public class DataStorage {
     }
 
     public CompletableFuture<Optional<PlayerDataBundle>> fetchBundleAsync(UUID uuid) {
-        return CompletableFuture.supplyAsync(() -> fetchBundle(uuid), VIRTUAL_EXECUTOR);
+        return CompletableFuture.supplyAsync(() -> fetchBundle(uuid), StorageLifecycleManager.VIRTUAL_EXECUTOR);
     }
 }

@@ -15,12 +15,8 @@ public class LifecycleEvents {
         ServerLifecycleEvents.SERVER_STARTED.register(server -> {
             savage.natsplayerdata.NATSPlayerDataBridge.setServer(server);
             
-            // Centralized Initialization
-            var conn = savage.natsfabric.NatsManager.getInstance().getConnection();
-            savage.natsplayerdata.storage.StorageLifecycleManager.getInstance().initialize(conn);
-
-            SessionStorage.getInstance().reconcileLocalSessions();
-            savage.natsplayerdata.session.SessionManager.initRpcListener(server);
+            // Centralized Async Initialization (Watchdog)
+            savage.natsplayerdata.storage.StorageLifecycleManager.getInstance().scheduleInitialization(server);
         });
 
         // Shutdown data drain

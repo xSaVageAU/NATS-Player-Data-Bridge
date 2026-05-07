@@ -1,8 +1,14 @@
 package savage.natsplayerdata.storage;
 
 import io.nats.client.Connection;
+import net.minecraft.server.MinecraftServer;
 import savage.natsplayerdata.NATSPlayerDataBridge;
+import savage.natsplayerdata.session.SessionManager;
 
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
@@ -13,6 +19,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 public class StorageLifecycleManager {
 
     private final AtomicBoolean ready = new AtomicBoolean(false);
+    public static final ExecutorService VIRTUAL_EXECUTOR = Executors.newVirtualThreadPerTaskExecutor();
 
     private static final class Holder {
         private static final StorageLifecycleManager INSTANCE = new StorageLifecycleManager();
@@ -61,5 +68,43 @@ public class StorageLifecycleManager {
         } catch (Exception e) {
             NATSPlayerDataBridge.LOGGER.error("Cluster: Storage initialization failed: {}", e.getMessage());
         }
+    }
+
+    /**
+     * Schedules a background task to wait for NATS and initialize storage.
+     * Once initialized, it runs startup tasks like session reconciliation on the server thread.
+     */
+    public void scheduleInitialization(MinecraftServer server) {
+        VIRTUAL_EXECUTOR.execute(() -> {
+            NATSPlayerDataBridge.LOGGER.info("Cluster: Starting async storage watchdog...");
+            int attempts = 0;
+            while (!ready.get() && attempts < 30) {
+                try {
+                    var conn = savage.natsfabric.NatsManager.getInstance().getConnection();
+                    if (conn != null && conn.getStatus() == Connection.Status.CONNECTED) {
+                        initialize(conn);
+
+                        // Run post-init tasks on the server thread
+                        server.execute(() -> {
+                            SessionStorage.getInstance().reconcileLocalSessions();
+                            SessionManager.initRpcListener(server);
+                        });
+                        return;
+                    }
+                } catch (Exception ignored) {}
+
+                attempts++;
+                try {
+                    TimeUnit.SECONDS.sleep(2);
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    return;
+                }
+            }
+
+            if (!ready.get()) {
+                NATSPlayerDataBridge.LOGGER.error("Cluster: FATAL - Storage initialization TIMED OUT after 60s. The bridge will NOT be active.");
+            }
+        });
     }
 }
