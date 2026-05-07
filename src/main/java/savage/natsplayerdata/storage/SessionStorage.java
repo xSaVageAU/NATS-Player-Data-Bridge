@@ -145,7 +145,14 @@ public class SessionStorage {
                         
                         if (session.state() == PlayerState.DIRTY && localServerId.equals(session.lastServer())) {
                             UUID uuid = session.uuid();
-                            
+
+                            // SAFETY: Never heal a session for a player that is currently online on THIS server!
+                            var server = NATSPlayerDataBridge.getServer();
+                            if (server != null && server.getPlayerList().getPlayer(uuid) != null) {
+                                NATSPlayerDataBridge.debugLog("SessionStorage: Skipping reconciliation for {} - Player is currently online.", uuid);
+                                return;
+                            }
+
                             // Check if this was a "Ghost Lock" (No local vault data = Hard Crash)
                             if (!PersistenceService.hasPendingSync(uuid)) {
                                 NATSPlayerDataBridge.LOGGER.warn("Cluster: Detected unrecoverable desync for {}. Player was online during a hard crash; progress since last auto-save may be lost.", uuid);
