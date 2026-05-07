@@ -62,7 +62,7 @@ public class SyncService {
                 NATSPlayerDataBridge.LOGGER.error("Cluster: Async fetch failed for {}: {}", uuid, e.getMessage());
                 return Optional.<PlayerDataBundle>empty();
             }
-        }, DataStorage.VIRTUAL_EXECUTOR);
+        }, savage.natsplayerdata.storage.StorageLifecycleManager.VIRTUAL_EXECUTOR);
 
         // Cleanup after 30 seconds if never consumed
         future.orTimeout(30, TimeUnit.SECONDS).whenComplete((res, ex) -> {
@@ -143,7 +143,7 @@ public class SyncService {
                 NATSPlayerDataBridge.LOGGER.error("Sync Error: Failed to push bundle for {}: {}", playerName,
                         e.getMessage());
             }
-        }, DataStorage.VIRTUAL_EXECUTOR);
+        }, savage.natsplayerdata.storage.StorageLifecycleManager.VIRTUAL_EXECUTOR);
     }
 
     /**
@@ -154,6 +154,6 @@ public class SyncService {
             if (bundle != null) {
                 savage.natsplayerdata.backup.BackupManager.getInstance().createBackup(bundle);
             }
-        }, DataStorage.VIRTUAL_EXECUTOR);
+        }, savage.natsplayerdata.storage.StorageLifecycleManager.VIRTUAL_EXECUTOR);
     }
 }

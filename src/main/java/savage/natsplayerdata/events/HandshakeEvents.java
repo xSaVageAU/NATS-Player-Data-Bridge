@@ -95,7 +95,7 @@ public class HandshakeEvents {
                     NATSPlayerDataBridge.LOGGER.error("Handshake Error for {}: {}", uuid, e.getMessage());
                     handler.disconnect(Component.literal("§cCluster Error: Failed to synchronize session lock."));
                 }
-            }, DataStorage.VIRTUAL_EXECUTOR);
+            }, savage.natsplayerdata.storage.StorageLifecycleManager.VIRTUAL_EXECUTOR);
 
             synchronizer.waitFor(loginFuture);
         });
