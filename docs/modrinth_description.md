@@ -69,6 +69,18 @@ If you are also using [FabricProxy-Lite](https://modrinth.com/mod/fabricproxy-li
 
 ---
 
+## High Availability & Resilience
+
+The bridge is designed for production environments where network stability is critical:
+
+- **Zero-Loss Vaulting:** If NATS is down, player data is saved to a local disk vault (`pending_sync/`) and automatically synced back to the cluster upon reconnection.
+- **Atomic Self-Healing:** Servers perform a multi-stage recovery on startup and reconnection to reconcile orphaned locks and clear local vaults.
+- **Readiness Gating:** Servers stay in an "Initializing" state (blocking joins) until all background healing and synchronization is 100% complete.
+- **Stale Data Protection:** Intelligent timestamp comparison prevents an old server from overwriting newer cluster data during recovery.
+- **Infinite Watchdog:** A hardened networking layer that performs automatic, infinite reconnection retries without impacting server stability.
+
+---
+
 ## Admin Commands
 
 All commands require operator permissions.
@@ -86,11 +98,10 @@ All commands require operator permissions.
 
 ## Data Handling Notes
 
-- **Locking:** Each player session is assigned a cluster-wide lock. A server can only write data if it holds that lock, preventing overwrites from two servers racing to save simultaneously.
-- **Background saves:** Push and pull operations run on a background thread so they do not cause lag spikes.
-- **Crash recovery:** On startup, each server automatically releases any locks it was holding when it last shut down unexpectedly.
-- **Rollbacks:** An admin can restore a player to a previous manual backup snapshot. If the player is online, they are automatically kicked. The backup is applied when they next log in.
-- **Data format:** Player data is packed into a compact binary format (CBOR) before being sent to NATS, keeping transfers small and fast.
+- **Cluster-Wide Locking:** Each player session is assigned a unique lock. A server can only write data if it holds that lock, preventing data corruption from racing servers.
+- **Background Operations:** All push/pull operations run on a dedicated virtual-thread executor to ensure zero impact on server TPS.
+- **Binary Format:** Data is packed into a compact CBOR binary format, minimizing network overhead and disk usage.
+- **Rollbacks:** Admins can restore players to previous snapshots. If the player is online, they are automatically kicked to apply the data safely.
 
 ---
 
