@@ -23,10 +23,10 @@ public class HandshakeEvents {
         // --- 1. EARLY BLOCK (NATS OFFLINE) ---
         ServerLoginConnectionEvents.INIT.register((handler, server) -> {
             NATSPlayerDataBridge.debugLog("ServerLoginConnectionEvents.INIT Triggered!");
-            if (!SessionStorage.getInstance().isAvailable()) {
-                NATSPlayerDataBridge.LOGGER.error("Cluster: Rejecting login - NATS cluster is unreachable!");
+            if (!savage.natsplayerdata.storage.StorageLifecycleManager.getInstance().isReady()) {
+                NATSPlayerDataBridge.LOGGER.error("Cluster: Rejecting login - Cluster initialization in progress!");
                 handler.disconnect(Component
-                        .literal("§cAuthentication failed: Cluster connection unreachable. Please try again later."));
+                        .literal("§cAuthentication failed: Cluster initialization in progress. Please wait a moment."));
             }
         });
 

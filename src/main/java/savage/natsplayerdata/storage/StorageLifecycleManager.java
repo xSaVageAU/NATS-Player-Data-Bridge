@@ -63,6 +63,10 @@ public class StorageLifecycleManager {
             // 3. Initialize Backup Storage (dedicated bucket)
             BackupStorage.getInstance().init(conn, backupBucket, backupHistory);
 
+            // 4. Perform session reconciliation (Heal orphaned locks)
+            NATSPlayerDataBridge.LOGGER.info("Cluster: Healing orphaned session locks...");
+            SessionStorage.getInstance().reconcileLocalSessions();
+
             ready.set(true);
             NATSPlayerDataBridge.LOGGER.info("Cluster: All storage buckets are READY.");
         } catch (Exception e) {
@@ -86,7 +90,6 @@ public class StorageLifecycleManager {
 
                         // Run post-init tasks on the server thread
                         server.execute(() -> {
-                            SessionStorage.getInstance().reconcileLocalSessions();
                             SessionManager.initRpcListener(server);
                         });
                         return;
