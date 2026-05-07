@@ -30,7 +30,7 @@ public class StorageLifecycleManager {
     }
 
     public boolean isReady() {
-        return ready.get();
+        return ready.get() && savage.natsfabric.NatsManager.getInstance().isConnected();
     }
 
     /**

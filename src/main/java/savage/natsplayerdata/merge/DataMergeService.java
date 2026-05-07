@@ -83,6 +83,12 @@ public class DataMergeService {
      * Fetches cluster data and writes it to local disk before Minecraft loads it.
      */
     public static java.util.Optional<CompoundTag> fetchAndApply(UUID uuid, MinecraftServer server) {
+        // CIRCUIT BREAKER: If NATS is down, fail fast to prevent blocking the Server Thread
+        if (!savage.natsplayerdata.storage.StorageLifecycleManager.getInstance().isReady()) {
+            NATSPlayerDataBridge.LOGGER.warn("Cluster: Skipping cluster merge for {} - Bridge is not ready/connected.", uuid);
+            return java.util.Optional.empty();
+        }
+
         BridgeConfig config = NATSPlayerDataBridge.getConfig();
 
         // SESSION LOCK: STRICT PULL GUARD

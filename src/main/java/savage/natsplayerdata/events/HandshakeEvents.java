@@ -47,19 +47,24 @@ public class HandshakeEvents {
                             var sessionOpt = SessionStorage.getInstance().fetchSession(uuid);
                             if (sessionOpt.isPresent() && sessionOpt.get().state().state() == savage.natsplayerdata.model.PlayerState.DIRTY) {
                                 String owner = sessionOpt.get().state().lastServer();
-                                NATSPlayerDataBridge.LOGGER.info("Cluster: Proxy switch detected! Requesting lock release from {} for {}", owner, uuid);
-                                var conn = savage.natsfabric.NatsManager.getInstance().getConnection();
-                                if (conn != null) {
-                                    try {
-                                        // Ask the origin server to dump data and release the lock immediately
-                                        var reply = conn.request("session.release." + owner, uuid.toString().getBytes(), java.time.Duration.ofSeconds(2));
-                                        if (reply != null && "OK".equals(new String(reply.getData()))) {
-                                            NATSPlayerDataBridge.LOGGER.info("Cluster: Lock released by {}, acquiring...", owner);
-                                            // The OK reply guarantees the push is complete, so we can immediately acquire the lock
-                                            locked = SessionManager.tryAcquireLock(uuid);
+                                String localServerId = savage.natsfabric.NatsManager.getInstance().getServerName();
+
+                                // Only attempt RPC if the lock is owned by a DIFFERENT server
+                                if (!localServerId.equals(owner)) {
+                                    NATSPlayerDataBridge.LOGGER.info("Cluster: Proxy switch detected! Requesting lock release from {} for {}", owner, uuid);
+                                    var conn = savage.natsfabric.NatsManager.getInstance().getConnection();
+                                    if (conn != null) {
+                                        try {
+                                            // Ask the origin server to dump data and release the lock immediately
+                                            var reply = conn.request("session.release." + owner, uuid.toString().getBytes(), java.time.Duration.ofSeconds(2));
+                                            if (reply != null && "OK".equals(new String(reply.getData()))) {
+                                                NATSPlayerDataBridge.LOGGER.info("Cluster: Lock released by {}, acquiring...", owner);
+                                                // The OK reply guarantees the push is complete, so we can immediately acquire the lock
+                                                locked = SessionManager.tryAcquireLock(uuid);
+                                            }
+                                        } catch (Exception ignored) {
+                                            NATSPlayerDataBridge.LOGGER.warn("Cluster: RPC lock release timed out for {}", uuid);
                                         }
-                                    } catch (Exception ignored) {
-                                        NATSPlayerDataBridge.LOGGER.warn("Cluster: RPC lock release timed out for {}", uuid);
                                     }
                                 }
                             }
