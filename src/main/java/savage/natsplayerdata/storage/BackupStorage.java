@@ -38,6 +38,7 @@ public class BackupStorage {
 
         String bucketName = NATSPlayerDataBridge.getConfig() != null && NATSPlayerDataBridge.getConfig().backupBucketName != null 
                 ? NATSPlayerDataBridge.getConfig().backupBucketName : "player-backups-v1";
+        int historyCount = NATSPlayerDataBridge.getConfig() != null ? NATSPlayerDataBridge.getConfig().backupHistoryCount : 20;
 
         try {
             var conn = NatsManager.getInstance().getConnection();
@@ -50,7 +51,7 @@ public class BackupStorage {
                 io.nats.client.KeyValueManagement kvm = conn.keyValueManagement();
                 kvm.create(KeyValueConfiguration.builder()
                         .name(bucketName)
-                        .maxHistoryPerKey(20)
+                        .maxHistoryPerKey(historyCount)
                         .build());
                 backupBucket = conn.keyValue(bucketName);
                 NATSPlayerDataBridge.LOGGER.info("BackupStorage: Created persistent backup bucket '{}'", bucketName);

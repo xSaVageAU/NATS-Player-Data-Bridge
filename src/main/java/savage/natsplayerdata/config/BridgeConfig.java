@@ -64,6 +64,9 @@ public class BridgeConfig {
     /** The NATS KV bucket name for long-term backups. */
     public String backupBucketName = "player-backups-v1";
 
+    /** The maximum number of historical revisions to keep per player in the backup bucket. */
+    public int backupHistoryCount = 20;
+
     public BridgeConfig() {
         // Defaults are now initialized directly in the field.
     }

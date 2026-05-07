@@ -62,6 +62,7 @@ If you are also using [FabricProxy-Lite](https://modrinth.com/mod/fabricproxy-li
 | `syncAdvancements` | `true` | Sync advancements. |
 | `filterMode` | `"whitelist"` | `"whitelist"` syncs only listed NBT keys. `"blacklist"` syncs everything except listed keys. |
 | `filterKeys` | Inventory, health, XP, etc. | The NBT keys to include or exclude depending on filterMode. |
+| `backupHistoryCount` | `20` | The number of historical snapshots to keep per player in the backup bucket. |
 
 ---
 
