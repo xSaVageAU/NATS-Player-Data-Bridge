@@ -57,6 +57,7 @@ public class NATSPlayerDataBridge implements ModInitializer {
 
 		// Initialize Backup System
 		savage.natsplayerdata.backup.BackupManager.getInstance();
+		savage.natsplayerdata.backup.backupevents.AutoBackupManager.getInstance().init(config);
 
 		// Register all backend services and events
 		LifecycleEvents.register();

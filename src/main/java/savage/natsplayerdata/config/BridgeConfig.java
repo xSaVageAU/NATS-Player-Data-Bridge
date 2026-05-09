@@ -84,14 +84,6 @@ public class BridgeConfig {
         // Death Trigger (No options needed)
         policies.add(new savage.natsplayerdata.model.BackupPolicy(true, savage.natsplayerdata.model.BackupTrigger.DEATH, new HashMap<>()));
 
-        // Shutdown Trigger (No options needed)
-        policies.add(new savage.natsplayerdata.model.BackupPolicy(true, savage.natsplayerdata.model.BackupTrigger.SHUTDOWN, new HashMap<>()));
-
-        // Interval Trigger (Option for minutes)
-        Map<String, Object> intervalOptions = new HashMap<>();
-        intervalOptions.put("minutes", 60);
-        policies.add(new savage.natsplayerdata.model.BackupPolicy(false, savage.natsplayerdata.model.BackupTrigger.INTERVAL, intervalOptions));
-
         return policies;
     }
 
