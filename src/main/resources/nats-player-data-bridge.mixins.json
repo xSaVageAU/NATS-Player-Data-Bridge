@@ -5,6 +5,7 @@
 	"mixins": [
 		"PlayerSyncMixin",
 		"SameServerGuardMixin",
+		"ServerPlayerMixin",
 		"TransferFreezeMixin$PacketListenerMixin",
 		"TransferFreezeMixin$PlayerCombatMixin",
 		"TransferFreezeMixin$ItemPickupMixin"

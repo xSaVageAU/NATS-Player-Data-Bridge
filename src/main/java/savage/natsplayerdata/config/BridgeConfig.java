@@ -84,6 +84,11 @@ public class BridgeConfig {
         // Death Trigger (No options needed)
         policies.add(new savage.natsplayerdata.model.BackupPolicy(true, savage.natsplayerdata.model.BackupTrigger.DEATH, new HashMap<>()));
 
+        // Dimension Change (Enabled for Nether/End by default)
+        Map<String, Object> dimOptions = new HashMap<>();
+        dimOptions.put("dimensions", java.util.List.of("minecraft:the_nether", "minecraft:the_end"));
+        policies.add(new savage.natsplayerdata.model.BackupPolicy(true, savage.natsplayerdata.model.BackupTrigger.DIMENSION_CHANGE, dimOptions));
+
         return policies;
     }
 
@@ -108,9 +113,33 @@ public class BridgeConfig {
             }
         }
 
+        // Ensure new default policies are merged in if missing
+        config.validate();
+
         // Always save back to disk to ensure any new fields are added to the file
         config.save();
         return config;
+    }
+
+    /**
+     * Ensures that all default backup policies exist in the configuration.
+     * This allows new triggers added in updates to appear in existing config files.
+     */
+    public void validate() {
+        if (backupPolicies == null) {
+            backupPolicies = createDefaultPolicies();
+            return;
+        }
+
+        List<savage.natsplayerdata.model.BackupPolicy> defaults = createDefaultPolicies();
+        for (var defaultPolicy : defaults) {
+            boolean exists = backupPolicies.stream()
+                .anyMatch(p -> p.trigger() == defaultPolicy.trigger());
+            
+            if (!exists) {
+                backupPolicies.add(defaultPolicy);
+            }
+        }
     }
 
     public void save() {

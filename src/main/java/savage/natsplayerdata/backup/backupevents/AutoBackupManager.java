@@ -22,6 +22,7 @@ public class AutoBackupManager {
 
     private AutoBackupManager() {
         registerHandler(BackupTrigger.DEATH, new DeathHandler());
+        registerHandler(BackupTrigger.DIMENSION_CHANGE, new DimensionHandler());
     }
 
     /**
