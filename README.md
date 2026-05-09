@@ -64,6 +64,7 @@ If you are also using [FabricProxy-Lite](https://modrinth.com/mod/fabricproxy-li
 | `filterMode` | `"whitelist"` | `"whitelist"` syncs only listed NBT keys. `"blacklist"` syncs everything except listed keys. |
 | `filterKeys` | Inventory, health, XP, etc. | The NBT keys to include or exclude depending on filterMode. |
 | `backupHistoryCount` | `20` | The number of historical snapshots to keep per player in the backup bucket. |
+| `autoBackupPolicies` | `[DEATH, DIMENSION_CHANGE]` | List of triggers that automatically create snapshots. |
 
 ## Admin Commands
 
@@ -72,10 +73,10 @@ All commands require operator permissions.
 | Command | Description |
 |---|---|
 | `/nats sync [player]` | Manually push a player's data to the cluster. |
-| `/nats sessions list` | View all active session locks in the cluster. |
-| `/nats sessions clean <uuid>` | Clear a stuck session lock for a specific player. |
-| `/nats backup push <player>` | Create a long-term snapshot of a player's current data. |
-| `/nats backup list <player>` | View available snapshots for a player. |
+| `/nats sessions list [page]` | View DIRTY session locks in the cluster (paginated). |
+| `/nats sessions clean <player/uuid>` | Clear a stuck session lock for a specific player by name or UUID. |
+| `/nats backup push <player>` | Create a manual snapshot of a player's data. |
+| `/nats backup list <player>` | View snapshots. Hover over entries for tags (death, dim_change, etc). |
 | `/nats backup restore <player> <rev>` | Stage a restoration. **Requires `/nats backup confirm` to execute.** |
 | `/nats backup confirm` | Execute a staged restoration. The player will be kicked to apply data safely. |
 
@@ -88,6 +89,7 @@ The bridge is built for production environments where data integrity and network
 - **Cluster-Wide Locking:** Each player session is assigned a unique lock. A server can only write data if it holds that lock, preventing corruption from racing servers.
 - **Fail-to-Safety (Vaulting):** If NATS is unreachable, player data is saved to a local disk vault (`nats-player-data-bridge/pending_sync/`) and automatically synced back when the connection is restored.
 - **Self-Healing:** Servers perform an atomic recovery on startup to reconcile orphaned locks and clear any local vault data.
+- **Auto-Backups:** Configurable triggers (Death, Dimension Change) create safety snapshots automatically.
 - **Background Processing:** All network operations run on dedicated virtual threads to ensure zero impact on server TPS.
 - **Binary Format:** Data is packed into a compact CBOR binary format with Zstd compression for minimal network overhead.
 - **Stale Data Protection:** Intelligent timestamping prevents old data from overwriting newer progress during cluster recovery.
