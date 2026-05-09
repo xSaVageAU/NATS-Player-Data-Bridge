@@ -9,7 +9,10 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 
 /**
  * Configuration for the NATS Player Data Bridge.
@@ -69,6 +72,28 @@ public class BridgeConfig {
 
     /** The maximum number of historical revisions to keep per player in the backup bucket. */
     public int backupHistoryCount = 20;
+
+    /**
+     * Automatic backup policies.
+     */
+    public List<savage.natsplayerdata.model.BackupPolicy> backupPolicies = createDefaultPolicies();
+
+    private static List<savage.natsplayerdata.model.BackupPolicy> createDefaultPolicies() {
+        List<savage.natsplayerdata.model.BackupPolicy> policies = new ArrayList<>();
+        
+        // Death Trigger (No options needed)
+        policies.add(new savage.natsplayerdata.model.BackupPolicy(true, savage.natsplayerdata.model.BackupTrigger.DEATH, new HashMap<>()));
+
+        // Shutdown Trigger (No options needed)
+        policies.add(new savage.natsplayerdata.model.BackupPolicy(true, savage.natsplayerdata.model.BackupTrigger.SHUTDOWN, new HashMap<>()));
+
+        // Interval Trigger (Option for minutes)
+        Map<String, Object> intervalOptions = new HashMap<>();
+        intervalOptions.put("minutes", 60);
+        policies.add(new savage.natsplayerdata.model.BackupPolicy(false, savage.natsplayerdata.model.BackupTrigger.INTERVAL, intervalOptions));
+
+        return policies;
+    }
 
     public BridgeConfig() {
         // Defaults are now initialized directly in the field.
