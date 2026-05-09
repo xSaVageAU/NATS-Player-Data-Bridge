@@ -76,7 +76,10 @@ public class BundlePacker {
             savage.natsfabric.NatsManager.getInstance().getServerName(),
             reason,
             tag,
-            "1.0.0-beta.7", // Future: Fetch dynamically from Fabric Loader
+            net.fabricmc.loader.api.FabricLoader.getInstance()
+                .getModContainer("nats-player-data-bridge")
+                .map(container -> container.getMetadata().getVersion().getFriendlyString())
+                .orElse("unknown"),
             player.level().dimension().identifier().toString(),
             System.currentTimeMillis()
         );

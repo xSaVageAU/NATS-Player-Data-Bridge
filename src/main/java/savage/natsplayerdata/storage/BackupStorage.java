@@ -100,7 +100,7 @@ public class BackupStorage {
                 byte[] decompressed = CompressionUtil.decompress(compressedData);
                 var bundle = Serialization.CBOR.readValue(decompressed, savage.natsplayerdata.model.PlayerDataBundle.class);
                 if (bundle != null) {
-                    var meta = new savage.natsplayerdata.model.BackupMetadata("unknown", "LEGACY", "legacy", "1.0.0-beta.6", "unknown", bundle.timestamp());
+                    var meta = new savage.natsplayerdata.model.BackupMetadata("unknown", "LEGACY", "legacy", "unknown", "unknown", bundle.timestamp());
                     return Optional.of(new savage.natsplayerdata.model.BackupEnvelope(meta, bundle));
                 }
             } catch (Exception ignored) {
