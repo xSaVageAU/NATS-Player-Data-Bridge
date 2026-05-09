@@ -92,9 +92,13 @@ public class BackupSubCommand {
 
                 if (envelopeOpt.isPresent()) {
                     var meta = envelopeOpt.get().metadata();
+                    
                     metaInfo = String.format(" §8| §7%s", meta.reason());
-                    hoverInfo = String.format("§eRevision #%d\n§7Reason: §f%s\n§7Dimension: §f%s\n§7Server: §f%s\n§7Version: §f%s\n\n§aClick to stage restoration", 
-                        rev, meta.reason(), meta.dimension(), meta.serverId(), meta.modVersion());
+                    
+                    String tagLine = (meta.tag() != null && !meta.tag().isEmpty()) ? "\n§7Tag: §f" + meta.tag() : "";
+                    
+                    hoverInfo = String.format("§eRevision #%d\n§7Reason: §f%s%s\n§7Dimension: §f%s\n§7Server: §f%s\n§7Version: §f%s\n\n§aClick to stage restoration", 
+                        rev, meta.reason(), tagLine, meta.dimension(), meta.serverId(), meta.modVersion());
                 }
 
                 var time = LocalDateTime.ofInstant(entry.getCreated().toInstant(), ZoneId.systemDefault());
