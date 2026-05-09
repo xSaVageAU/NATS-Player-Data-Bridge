@@ -83,7 +83,8 @@ public class DataMergeService {
         Map<String, Object> adv = BundlePacker.captureAdv(uuid, server);
 
         // 3. Async Backup Push
-        SyncService.pushBackupAsync(BundlePacker.captureBundle(uuid, playerName, nbt, stats, adv));
+        SyncService.pushBackupAsync(BundlePacker.captureBundle(uuid, playerName, nbt, stats, adv), 
+            savage.natsplayerdata.model.BackupMetadata.REASON_MANUAL, null);
     }
 
     /**

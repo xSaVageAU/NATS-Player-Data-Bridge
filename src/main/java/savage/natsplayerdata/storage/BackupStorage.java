@@ -63,25 +63,49 @@ public class BackupStorage {
     }
 
     /**
-     * Snapshots a player bundle into the historical bucket.
+     * Snapshots a player bundle into the historical bucket with metadata.
      */
-    public boolean storeBackup(PlayerDataBundle bundle) {
+    public boolean storeBackup(savage.natsplayerdata.model.BackupEnvelope envelope) {
         try {
             ensureReady();
         } catch (Exception e) {
-            NATSPlayerDataBridge.LOGGER.error("BackupStorage: Cannot store backup for {} - Storage not ready!", bundle.uuid());
+            NATSPlayerDataBridge.LOGGER.error("BackupStorage: Cannot store backup - Storage not ready!");
             return false;
         }
         try {
-            byte[] cborBinary = Serialization.CBOR.writeValueAsBytes(bundle);
+            byte[] cborBinary = Serialization.CBOR.writeValueAsBytes(envelope);
             byte[] compressedBinary = CompressionUtil.compress(cborBinary);
 
-            backupBucket.put("backup." + bundle.uuid(), compressedBinary);
-            NATSPlayerDataBridge.LOGGER.info("BackupStorage: Historical snapshot created for {}", bundle.uuid());
+            backupBucket.put("backup." + envelope.bundle().uuid(), compressedBinary);
+            NATSPlayerDataBridge.LOGGER.info("BackupStorage: Historical snapshot created for {} (Reason: {})", envelope.bundle().uuid(), envelope.metadata().reason());
             return true;
         } catch (Exception e) {
-            NATSPlayerDataBridge.LOGGER.error("BackupStorage: Failed to store backup for {}: {}", bundle.uuid(), e.getMessage());
+            NATSPlayerDataBridge.LOGGER.error("BackupStorage: Failed to store backup for {}: {}", envelope.bundle().uuid(), e.getMessage());
             return false;
+        }
+    }
+
+    /**
+     * Deserializes a backup entry with a fallback for legacy Beta 6 bundles.
+     */
+    public Optional<savage.natsplayerdata.model.BackupEnvelope> deserializeEnvelope(byte[] compressedData) {
+        try {
+            byte[] decompressed = CompressionUtil.decompress(compressedData);
+            return Optional.ofNullable(Serialization.CBOR.readValue(decompressed, savage.natsplayerdata.model.BackupEnvelope.class));
+        } catch (Exception e) {
+            // FALLBACK: Try reading as a raw PlayerDataBundle (Legacy Beta 6 format)
+            try {
+                byte[] decompressed = CompressionUtil.decompress(compressedData);
+                var bundle = Serialization.CBOR.readValue(decompressed, savage.natsplayerdata.model.PlayerDataBundle.class);
+                if (bundle != null) {
+                    // Create a synthetic envelope for legacy data
+                    var meta = new savage.natsplayerdata.model.BackupMetadata("unknown", "LEGACY", "legacy", "1.0.0-beta.6", bundle.timestamp());
+                    return Optional.of(new savage.natsplayerdata.model.BackupEnvelope(meta, bundle));
+                }
+            } catch (Exception ignored) {}
+            
+            NATSPlayerDataBridge.LOGGER.error("BackupStorage: Failed to deserialize envelope: {}", e.getMessage());
+            return Optional.empty();
         }
     }
 

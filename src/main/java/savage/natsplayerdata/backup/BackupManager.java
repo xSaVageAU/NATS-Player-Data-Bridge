@@ -28,8 +28,9 @@ public class BackupManager {
     /**
      * Creates a manual backup snapshot of the player's current data.
      */
-    public boolean createBackup(PlayerDataBundle bundle) {
-        return BackupStorage.getInstance().storeBackup(bundle);
+    public boolean createBackup(PlayerDataBundle bundle, String reason, String tag) {
+        var meta = savage.natsplayerdata.util.BundlePacker.captureMetadata(reason, tag);
+        return BackupStorage.getInstance().storeBackup(new savage.natsplayerdata.model.BackupEnvelope(meta, bundle));
     }
 
     /**
@@ -53,8 +54,14 @@ public class BackupManager {
         var targetOpt = getBackupEntry(uuid, revision);
         if (targetOpt.isEmpty()) return false;
         
-        byte[] compressedData = targetOpt.get().getValue();
-        DataStorage.getInstance().pushRawBundle(uuid, compressedData);
-        return true;
+        byte[] rawData = targetOpt.get().getValue();
+        var envelopeOpt = BackupStorage.getInstance().deserializeEnvelope(rawData);
+        
+        if (envelopeOpt.isPresent()) {
+            // Push only the PlayerDataBundle part to the live sync bucket
+            DataStorage.getInstance().pushBundle(envelopeOpt.get().bundle());
+            return true;
+        }
+        return false;
     }
 }
