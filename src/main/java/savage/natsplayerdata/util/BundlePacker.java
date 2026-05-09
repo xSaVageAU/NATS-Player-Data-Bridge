@@ -71,12 +71,13 @@ public class BundlePacker {
     /**
      * Captures baseline context metadata for a player at the time of backup.
      */
-    public static savage.natsplayerdata.model.BackupMetadata captureMetadata(String reason, String tag) {
+    public static savage.natsplayerdata.model.BackupMetadata captureMetadata(net.minecraft.server.level.ServerPlayer player, String reason, String tag) {
         return new savage.natsplayerdata.model.BackupMetadata(
             savage.natsfabric.NatsManager.getInstance().getServerName(),
             reason,
             tag,
             "1.0.0-beta.7", // Future: Fetch dynamically from Fabric Loader
+            player.level().dimension().identifier().toString(),
             System.currentTimeMillis()
         );
     }

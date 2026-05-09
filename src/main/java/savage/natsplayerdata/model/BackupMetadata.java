@@ -10,6 +10,7 @@ public record BackupMetadata(
     @JsonProperty("r") String reason,      // MANUAL, AUTO, PRE_RESTORE
     @JsonProperty("t") String tag,         // Optional label
     @JsonProperty("v") String modVersion,
+    @JsonProperty("d") String dimension,
     @JsonProperty("ts") long timestamp
 ) {
     public static final String REASON_MANUAL = "MANUAL";

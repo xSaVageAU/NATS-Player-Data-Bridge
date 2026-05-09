@@ -156,10 +156,10 @@ public class SyncService {
     /**
      * Handles the asynchronous offloading of a long-term backup snapshot.
      */
-    public static void pushBackupAsync(PlayerDataBundle bundle, String reason, String tag) {
+    public static void pushBackupAsync(PlayerDataBundle bundle, savage.natsplayerdata.model.BackupMetadata meta) {
         CompletableFuture.runAsync(() -> {
-            if (bundle != null) {
-                savage.natsplayerdata.backup.BackupManager.getInstance().createBackup(bundle, reason, tag);
+            if (bundle != null && meta != null) {
+                savage.natsplayerdata.backup.BackupManager.getInstance().createBackup(bundle, meta);
             }
         }, savage.natsplayerdata.storage.StorageLifecycleManager.VIRTUAL_EXECUTOR);
     }

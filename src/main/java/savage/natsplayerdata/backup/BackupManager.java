@@ -28,8 +28,7 @@ public class BackupManager {
     /**
      * Creates a manual backup snapshot of the player's current data.
      */
-    public boolean createBackup(PlayerDataBundle bundle, String reason, String tag) {
-        var meta = savage.natsplayerdata.util.BundlePacker.captureMetadata(reason, tag);
+    public boolean createBackup(PlayerDataBundle bundle, savage.natsplayerdata.model.BackupMetadata meta) {
         return BackupStorage.getInstance().storeBackup(new savage.natsplayerdata.model.BackupEnvelope(meta, bundle));
     }
 

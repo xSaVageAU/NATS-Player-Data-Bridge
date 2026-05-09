@@ -88,9 +88,12 @@ public class DataMergeService {
 
         Map<String, Object> stats = BundlePacker.captureStats(uuid, server);
         Map<String, Object> adv = BundlePacker.captureAdv(uuid, server);
+        
+        // 3. Capture metadata (Main Thread - for safe dimension/server access)
+        var meta = BundlePacker.captureMetadata(player, reason, tag);
 
-        // 3. Async Backup Push with metadata
-        SyncService.pushBackupAsync(BundlePacker.captureBundle(uuid, playerName, nbt, stats, adv), reason, tag);
+        // 4. Async Backup Push with metadata
+        SyncService.pushBackupAsync(BundlePacker.captureBundle(uuid, playerName, nbt, stats, adv), meta);
     }
 
     /**
