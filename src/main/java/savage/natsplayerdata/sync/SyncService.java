@@ -2,7 +2,6 @@ package savage.natsplayerdata.sync;
 
 import savage.natsplayerdata.NATSPlayerDataBridge;
 import savage.natsplayerdata.model.PlayerDataBundle;
-import savage.natsplayerdata.model.PlayerState;
 import savage.natsplayerdata.session.SessionManager;
 import savage.natsplayerdata.storage.DataStorage;
 import savage.natsplayerdata.storage.SessionStorage;

@@ -3,9 +3,7 @@ package savage.natsplayerdata.storage;
 import io.nats.client.KeyValue;
 import io.nats.client.api.KeyValueEntry;
 import io.nats.client.api.KeyValueConfiguration;
-import savage.natsfabric.NatsManager;
 import savage.natsplayerdata.NATSPlayerDataBridge;
-import savage.natsplayerdata.model.PlayerDataBundle;
 import savage.natsplayerdata.util.CompressionUtil;
 import savage.natsplayerdata.util.Serialization;
 

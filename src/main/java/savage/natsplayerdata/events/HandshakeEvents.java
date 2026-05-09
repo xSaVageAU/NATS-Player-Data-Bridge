@@ -6,7 +6,6 @@ import net.minecraft.network.chat.Component;
 import savage.natsplayerdata.NATSPlayerDataBridge;
 import savage.natsplayerdata.sync.SyncService;
 import savage.natsplayerdata.session.SessionManager;
-import savage.natsplayerdata.storage.DataStorage;
 import savage.natsplayerdata.storage.SessionStorage;
 import java.util.concurrent.CompletableFuture;
 

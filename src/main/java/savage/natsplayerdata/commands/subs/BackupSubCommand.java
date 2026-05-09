@@ -11,7 +11,6 @@ import net.minecraft.network.chat.MutableComponent;
 import net.minecraft.server.level.ServerPlayer;
 import savage.natsplayerdata.merge.DataMergeService;
 import savage.natsplayerdata.session.SessionManager;
-import savage.natsplayerdata.NATSPlayerDataBridge;
 import savage.natsplayerdata.backup.BackupManager;
 import savage.natsplayerdata.model.PlayerState;
 

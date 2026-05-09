@@ -1,6 +1,5 @@
 package savage.natsplayerdata.backup.backupevents;
 
-import net.fabricmc.fabric.api.entity.event.v1.ServerPlayerEvents;
 import net.minecraft.server.level.ServerPlayer;
 import savage.natsplayerdata.merge.DataMergeService;
 import savage.natsplayerdata.model.BackupMetadata;

@@ -5,7 +5,6 @@ import net.minecraft.server.MinecraftServer;
 import savage.natsplayerdata.NATSPlayerDataBridge;
 import savage.natsplayerdata.session.SessionManager;
 
-import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
