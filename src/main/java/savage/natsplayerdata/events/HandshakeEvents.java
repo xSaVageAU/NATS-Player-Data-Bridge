@@ -39,8 +39,9 @@ public class HandshakeEvents {
 
             CompletableFuture<Void> loginFuture = CompletableFuture.runAsync(() -> {
                 try {
+                    String name = handler.authenticatedProfile.name();
                     // 1. Acquire Local Lock (with FAIL-TO-SAFETY)
-                    boolean locked = SessionManager.tryAcquireLock(uuid);
+                    boolean locked = SessionManager.tryAcquireLock(uuid, name);
                     if (!locked) {
                         // Only execute RPC Fallback if proxyMode is enabled
                         if (NATSPlayerDataBridge.getConfig() != null && NATSPlayerDataBridge.getConfig().proxyMode) {
@@ -60,7 +61,7 @@ public class HandshakeEvents {
                                             if (reply != null && "OK".equals(new String(reply.getData()))) {
                                                 NATSPlayerDataBridge.LOGGER.info("Cluster: Lock released by {}, acquiring...", owner);
                                                 // The OK reply guarantees the push is complete, so we can immediately acquire the lock
-                                                locked = SessionManager.tryAcquireLock(uuid);
+                                                locked = SessionManager.tryAcquireLock(uuid, name);
                                             }
                                         } catch (Exception ignored) {
                                             NATSPlayerDataBridge.LOGGER.warn("Cluster: RPC lock release timed out for {}", uuid);

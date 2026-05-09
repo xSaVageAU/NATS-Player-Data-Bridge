@@ -63,17 +63,18 @@ public class SessionManager {
                         java.util.concurrent.CompletableFuture.runAsync(() -> {
                             server.execute(() -> {
                                 Long currentAttempt = TRANSFER_START_TIMES.get(targetUuid);
-                                if (currentAttempt != null && currentAttempt == attemptId) {
-                                    TRANSFER_START_TIMES.remove(targetUuid);
-                                    TRANSFERRING_PLAYERS.remove(targetUuid);
-                                    
-                                    var opt = SessionStorage.getInstance().fetchSession(targetUuid);
-                                    if (opt.isPresent() && opt.get().state().lastServer().equals(localServerId)) {
-                                        // Re-acquire the lock for this server since the transfer failed and we still own it
-                                        SessionState dirtyState = SessionState.create(targetUuid, savage.natsplayerdata.model.PlayerState.DIRTY, localServerId);
-                                        SessionStorage.getInstance().pushSession(dirtyState, opt.get().revision());
-                                        NATSPlayerDataBridge.LOGGER.warn("Cluster: Proxy transfer timed out for {}, reverted lock and unfroze.", player.getName().getString());
-                                    } else {
+                                    if (currentAttempt != null && currentAttempt == attemptId) {
+                                        TRANSFER_START_TIMES.remove(targetUuid);
+                                        TRANSFERRING_PLAYERS.remove(targetUuid);
+                                        
+                                        var opt = SessionStorage.getInstance().fetchSession(targetUuid);
+                                        if (opt.isPresent() && opt.get().state().lastServer().equals(localServerId)) {
+                                            // Re-acquire the lock for this server since the transfer failed and we still own it
+                                            SessionState oldState = opt.get().state();
+                                            SessionState dirtyState = SessionState.create(targetUuid, oldState.lastKnownName(), savage.natsplayerdata.model.PlayerState.DIRTY, localServerId);
+                                            SessionStorage.getInstance().pushSession(dirtyState, opt.get().revision());
+                                            NATSPlayerDataBridge.LOGGER.warn("Cluster: Proxy transfer timed out for {}, reverted lock and unfroze.", oldState.lastKnownName());
+                                        } else {
                                         player.connection.disconnect(net.minecraft.network.chat.Component.literal("§cDisconnected by proxy transfer."));
                                     }
                                 }
@@ -98,7 +99,7 @@ public class SessionManager {
      * STRICT FAIL-TO-SAFETY LOCK ACQUISITION
      * Returns true ONLY if the session is CLEAN or RESTORING.
      */
-    public static boolean tryAcquireLock(UUID uuid) {
+    public static boolean tryAcquireLock(UUID uuid, String name) {
         var sessionOpt = SessionStorage.getInstance().fetchSession(uuid);
         String localServerId = savage.natsfabric.NatsManager.getInstance().getServerName();
         
@@ -109,29 +110,29 @@ public class SessionManager {
             if (session.state() == PlayerState.DIRTY) {
                 return false;
             }
-
+ 
             // Lock is either CLEAN or RESTORING.
             long restoreRev = session.restoreRevision();
-            SessionState newState = new SessionState(uuid, PlayerState.DIRTY, localServerId, System.currentTimeMillis(), restoreRev);
+            SessionState newState = new SessionState(uuid, name, PlayerState.DIRTY, localServerId, System.currentTimeMillis(), restoreRev);
             return SessionStorage.getInstance().pushSession(newState, entry.revision());
         }
         
         // No lock exists. Safe to claim blindly.
-        setSessionState(uuid, PlayerState.DIRTY);
+        setSessionState(uuid, name, PlayerState.DIRTY);
         return true;
     }
 
-    public static void setSessionState(UUID uuid, PlayerState state) {
-        setSessionState(uuid, state, -1L);
+    public static void setSessionState(UUID uuid, String name, PlayerState state) {
+        setSessionState(uuid, name, state, -1L);
     }
 
-    public static void setSessionState(UUID uuid, PlayerState state, long restoreRevision) {
+    public static void setSessionState(UUID uuid, String name, PlayerState state, long restoreRevision) {
         String localServerId = savage.natsfabric.NatsManager.getInstance().getServerName();
         SessionState newState;
         if (state == PlayerState.RESTORING) {
-            newState = SessionState.createRestore(uuid, localServerId, restoreRevision);
+            newState = SessionState.createRestore(uuid, name, localServerId, restoreRevision);
         } else {
-            newState = SessionState.create(uuid, state, localServerId);
+            newState = SessionState.create(uuid, name, state, localServerId);
         }
         SessionStorage.getInstance().pushSession(newState);
     }
@@ -145,8 +146,9 @@ public class SessionManager {
         var opt = SessionStorage.getInstance().fetchSession(uuid);
         if (opt.isPresent()) {
             var entry = opt.get();
-            if (entry.state().lastServer().equals(localServerId) && entry.state().state() == PlayerState.DIRTY) {
-                SessionState cleanState = SessionState.create(uuid, PlayerState.CLEAN, localServerId);
+            var oldState = entry.state();
+            if (oldState.lastServer().equals(localServerId) && oldState.state() == PlayerState.DIRTY) {
+                SessionState cleanState = SessionState.create(uuid, oldState.lastKnownName(), PlayerState.CLEAN, localServerId);
                 boolean success = SessionStorage.getInstance().pushSession(cleanState, entry.revision());
                 if (!success) {
                     NATSPlayerDataBridge.LOGGER.warn("Cluster: Safe lock release failed for {} (CAS mismatch).", uuid);

@@ -164,7 +164,7 @@ public class BackupSubCommand {
         var onlinePlayer = source.getServer().getPlayerList().getPlayer(pending.targetUuid());
 
         // 1. Set cluster state to RESTORING to block incoming pushes
-        SessionManager.setSessionState(pending.targetUuid(), PlayerState.RESTORING, pending.revision());
+        SessionManager.setSessionState(pending.targetUuid(), pending.targetName(), PlayerState.RESTORING, pending.revision());
 
         // 3. Kick the player to force a re-login/sync
         if (onlinePlayer != null) {

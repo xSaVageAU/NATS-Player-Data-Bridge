@@ -174,7 +174,7 @@ public class SessionStorage {
                             NATSPlayerDataBridge.LOGGER.warn("Cluster: Detected unrecoverable desync for {}. Player was online during a hard crash; progress since last auto-save may be lost.", uuid);
                             
                             NATSPlayerDataBridge.debugLog("SessionStorage: Healing orphaned session for {}", key);
-                            pushSession(SessionState.create(uuid, PlayerState.CLEAN, localServerId));
+                            pushSession(SessionState.create(uuid, session.lastKnownName(), PlayerState.CLEAN, localServerId));
                             fixedCount.incrementAndGet();
                         }
                     } catch (Exception e) {
