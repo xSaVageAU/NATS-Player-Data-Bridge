@@ -66,6 +66,13 @@ public class DataMergeService {
      * bucket.
      */
     public static void backUp(ServerPlayer player, MinecraftServer server) {
+        backUpWithReason(player, server, savage.natsplayerdata.model.BackupMetadata.REASON_MANUAL, null);
+    }
+
+    /**
+     * Creates a backup with a specific reason and optional tag.
+     */
+    public static void backUpWithReason(ServerPlayer player, MinecraftServer server, String reason, String tag) {
         UUID uuid = player.getUUID();
         String playerName = player.getName().getString();
 
@@ -82,9 +89,8 @@ public class DataMergeService {
         Map<String, Object> stats = BundlePacker.captureStats(uuid, server);
         Map<String, Object> adv = BundlePacker.captureAdv(uuid, server);
 
-        // 3. Async Backup Push
-        SyncService.pushBackupAsync(BundlePacker.captureBundle(uuid, playerName, nbt, stats, adv), 
-            savage.natsplayerdata.model.BackupMetadata.REASON_MANUAL, null);
+        // 3. Async Backup Push with metadata
+        SyncService.pushBackupAsync(BundlePacker.captureBundle(uuid, playerName, nbt, stats, adv), reason, tag);
     }
 
     /**

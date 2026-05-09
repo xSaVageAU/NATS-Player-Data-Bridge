@@ -38,17 +38,24 @@ public class SyncService {
         var future = CompletableFuture.supplyAsync(() -> {
             try {
                 if (backupRevision != -1) {
-                    // --- DIRECT REDIRECT TO BACKUP BUCKET ---
-                    var targetOpt = savage.natsplayerdata.backup.BackupManager.getInstance().getBackupEntry(uuid, backupRevision);
-
+                    NATSPlayerDataBridge.LOGGER.info("Cluster: Detected rollback instruction for {} - Redirecting fetch to backup rev: {}", uuid, backupRevision);
+                    
+                    // 1. Fetch the raw revision from the backup bucket
+                    var targetOpt = savage.natsplayerdata.storage.BackupStorage.getInstance().getRevision(uuid, backupRevision);
+                    
                     if (targetOpt.isPresent()) {
                         byte[] compressedData = targetOpt.get().getValue();
-
-                        // Commit this rollback to the main sync bucket immediately
-                        DataStorage.getInstance().pushRawBundle(uuid, compressedData);
-
-                        // Deserialize and return the bundle for local use
-                        return DataStorage.getInstance().deserializeBundle(compressedData);
+                        NATSPlayerDataBridge.LOGGER.info("Cluster: Initiating async BACKUP (Rev: {}) fetch for {}", backupRevision, uuid);
+                        
+                        // 2. Properly unwrap the envelope/legacy data
+                        var envelopeOpt = savage.natsplayerdata.storage.BackupStorage.getInstance().deserializeEnvelope(compressedData);
+                        if (envelopeOpt.isPresent()) {
+                            var bundle = envelopeOpt.get().bundle();
+                            
+                            // 3. Commit the UNWRAPPED bundle to the main sync bucket for future joins
+                            DataStorage.getInstance().pushBundle(bundle);
+                            return Optional.of(bundle);
+                        }
                     } else {
                         NATSPlayerDataBridge.LOGGER.error(
                                 "Cluster: Backup redirect failed for {} - Revision {} not found!", uuid,

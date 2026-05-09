@@ -121,11 +121,28 @@ public class DataStorage {
     }
 
     public Optional<PlayerDataBundle> deserializeBundle(byte[] compressedBinary) {
+        if (compressedBinary == null || compressedBinary.length == 0) return Optional.empty();
+        
         try {
             byte[] decompressed = CompressionUtil.decompress(compressedBinary);
-            return Optional.ofNullable(Serialization.CBOR.readValue(decompressed, PlayerDataBundle.class));
+            
+            // 1. Try reading as a direct PlayerDataBundle (Standard)
+            try {
+                return Optional.ofNullable(Serialization.CBOR.readValue(decompressed, PlayerDataBundle.class));
+            } catch (Exception e) {
+                // 2. FALLBACK: Try reading as a BackupEnvelope (in case of redirection leakage)
+                try {
+                    var envelope = Serialization.CBOR.readValue(decompressed, savage.natsplayerdata.model.BackupEnvelope.class);
+                    if (envelope != null) {
+                        return Optional.of(envelope.bundle());
+                    }
+                } catch (Exception ignored) {}
+                
+                NATSPlayerDataBridge.LOGGER.error("DataStorage: Failed to deserialize bundle: {}", e.getMessage());
+                return Optional.empty();
+            }
         } catch (Exception e) {
-            NATSPlayerDataBridge.LOGGER.error("DataStorage: Failed to deserialize bundle: {}", e.getMessage());
+            NATSPlayerDataBridge.LOGGER.error("DataStorage: Decompression failed: {}", e.getMessage());
             return Optional.empty();
         }
     }

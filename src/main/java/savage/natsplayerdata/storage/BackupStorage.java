@@ -89,6 +89,8 @@ public class BackupStorage {
      * Deserializes a backup entry with a fallback for legacy Beta 6 bundles.
      */
     public Optional<savage.natsplayerdata.model.BackupEnvelope> deserializeEnvelope(byte[] compressedData) {
+        if (compressedData == null || compressedData.length == 0) return Optional.empty();
+        
         try {
             byte[] decompressed = CompressionUtil.decompress(compressedData);
             return Optional.ofNullable(Serialization.CBOR.readValue(decompressed, savage.natsplayerdata.model.BackupEnvelope.class));
@@ -98,13 +100,13 @@ public class BackupStorage {
                 byte[] decompressed = CompressionUtil.decompress(compressedData);
                 var bundle = Serialization.CBOR.readValue(decompressed, savage.natsplayerdata.model.PlayerDataBundle.class);
                 if (bundle != null) {
-                    // Create a synthetic envelope for legacy data
                     var meta = new savage.natsplayerdata.model.BackupMetadata("unknown", "LEGACY", "legacy", "1.0.0-beta.6", bundle.timestamp());
                     return Optional.of(new savage.natsplayerdata.model.BackupEnvelope(meta, bundle));
                 }
-            } catch (Exception ignored) {}
-            
-            NATSPlayerDataBridge.LOGGER.error("BackupStorage: Failed to deserialize envelope: {}", e.getMessage());
+            } catch (Exception ignored) {
+                // If fallback also fails, log the original error
+                NATSPlayerDataBridge.LOGGER.error("BackupStorage: Failed to deserialize entry (and fallback failed): {}", e.getMessage());
+            }
             return Optional.empty();
         }
     }

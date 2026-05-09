@@ -11,6 +11,7 @@ import net.minecraft.network.chat.MutableComponent;
 import net.minecraft.server.level.ServerPlayer;
 import savage.natsplayerdata.merge.DataMergeService;
 import savage.natsplayerdata.session.SessionManager;
+import savage.natsplayerdata.NATSPlayerDataBridge;
 import savage.natsplayerdata.backup.BackupManager;
 import savage.natsplayerdata.model.PlayerState;
 
@@ -82,29 +83,43 @@ public class BackupSubCommand {
 
         source.sendSuccess(() -> Component.literal("§b--- Backup History for " + name + " ---"), false);
         for (var entry : history) {
-            long rev = entry.getRevision();
-            var time = LocalDateTime.ofInstant(entry.getCreated().toInstant(), ZoneId.systemDefault());
-            
-            MutableComponent text = createInteractive(String.valueOf(rev), name, source);
-            text.append(Component.literal(" §8| §f" + time.format(TIME_FORMAT)));
-            
-            source.sendSuccess(() -> text, false);
+            try {
+                long rev = entry.getRevision();
+                var envelopeOpt = savage.natsplayerdata.storage.BackupStorage.getInstance().deserializeEnvelope(entry.getValue());
+                
+                String metaInfo = "";
+                String hoverInfo = "§7Click to stage restoration for revision #" + rev;
+
+                if (envelopeOpt.isPresent()) {
+                    var meta = envelopeOpt.get().metadata();
+                    metaInfo = String.format(" §8| §7%s", meta.reason());
+                    hoverInfo = String.format("§eRevision #%d\n§7Reason: §f%s\n§7Server: §f%s\n§7Version: §f%s\n\n§aClick to stage restoration", 
+                        rev, meta.reason(), meta.serverId(), meta.modVersion());
+                }
+
+                var time = LocalDateTime.ofInstant(entry.getCreated().toInstant(), ZoneId.systemDefault());
+                
+                // .copy() ensures we have a mutable component in 26.1+
+                MutableComponent text = createInteractive(String.valueOf(rev), name, hoverInfo, source).copy();
+                text.append(Component.literal(" §8| §f" + time.format(TIME_FORMAT)));
+                text.append(Component.literal(metaInfo));
+                
+                source.sendSuccess(() -> text, false);
+            } catch (Exception e) {
+                long rev = entry.getRevision();
+                source.sendSuccess(() -> Component.literal("§c[!] Error loading revision #" + rev), false);
+            }
         }
-        source.sendSuccess(() -> Component.literal("§7Click a revision above to stage a restoration."), false);
+        source.sendSuccess(() -> Component.literal("\n§7Click a revision above to stage a restoration."), false);
         return 1;
     }
 
-    private static MutableComponent createInteractive(String rev, String name, CommandSourceStack source) {
-        String json = "{\"text\":\"§e[Rev: " + rev + "]\",\"click_event\":{\"action\":\"suggest_command\",\"value\":\"/nats backup restore " + name + " " + rev + "\"},\"hover_event\":{\"action\":\"show_text\",\"value\":\"§7Click to stage restoration for revision #" + rev + "\"}}";
-        try {
-            // 1.21+ Year.Drop Serialization Path
-            var ops = source.registryAccess().createSerializationContext(com.mojang.serialization.JsonOps.INSTANCE);
-            return (MutableComponent) net.minecraft.network.chat.ComponentSerialization.CODEC
-                .parse(ops, com.google.gson.JsonParser.parseString(json))
-                .getOrThrow();
-        } catch (Exception e) {
-            return Component.literal("§e[Rev: " + rev + "]");
-        }
+    private static MutableComponent createInteractive(String rev, String name, String hover, CommandSourceStack source) {
+        return Component.literal("§e[Rev: " + rev + "]")
+            .withStyle(style -> style
+                .withClickEvent(new net.minecraft.network.chat.ClickEvent.SuggestCommand("/nats backup restore " + name + " " + rev))
+                .withHoverEvent(new net.minecraft.network.chat.HoverEvent.ShowText(Component.literal(hover)))
+            );
     }
 
     private static int stageRestore(CommandSourceStack source, UUID targetUuid, String targetName, long revision) {
@@ -121,20 +136,13 @@ public class BackupSubCommand {
             .append("\n§cType §e/nats backup confirm §cor click below to execute.")
             .append("\n"), false);
 
-        String confirmJson = "{\"text\":\"§a§l[ CLICK TO CONFIRM ROLLBACK ]\",\"click_event\":{\"action\":\"run_command\",\"value\":\"/nats backup confirm\"},\"hover_event\":{\"action\":\"show_text\",\"value\":\"§aProceed with restoration of " + targetName + "\"}}";
-        
-        MutableComponent confirmBtn;
-        try {
-            var ops = source.registryAccess().createSerializationContext(com.mojang.serialization.JsonOps.INSTANCE);
-            confirmBtn = (MutableComponent) net.minecraft.network.chat.ComponentSerialization.CODEC
-                .parse(ops, com.google.gson.JsonParser.parseString(confirmJson))
-                .getOrThrow();
-        } catch (Exception e) {
-            confirmBtn = Component.literal("§a§l[ CLICK TO CONFIRM ROLLBACK ]");
-        }
+        MutableComponent confirmBtn = Component.literal("§a§l[ CLICK TO CONFIRM ROLLBACK ]")
+            .withStyle(style -> style
+                .withClickEvent(new net.minecraft.network.chat.ClickEvent.RunCommand("/nats backup confirm"))
+                .withHoverEvent(new net.minecraft.network.chat.HoverEvent.ShowText(Component.literal("§aProceed with restoration of " + targetName)))
+            );
 
-        MutableComponent finalConfirmBtn = confirmBtn;
-        source.sendSuccess(() -> finalConfirmBtn, false);
+        source.sendSuccess(() -> confirmBtn, false);
         return 1;
     }
 
@@ -149,10 +157,12 @@ public class BackupSubCommand {
         }
 
         // --- EXECUTION ---
+        var onlinePlayer = source.getServer().getPlayerList().getPlayer(pending.targetUuid());
+
+        // 1. Set cluster state to RESTORING to block incoming pushes
         SessionManager.setSessionState(pending.targetUuid(), PlayerState.RESTORING, pending.revision());
 
-        // Kick the player
-        var onlinePlayer = source.getServer().getPlayerList().getPlayer(pending.targetUuid());
+        // 3. Kick the player to force a re-login/sync
         if (onlinePlayer != null) {
             onlinePlayer.connection.disconnect(Component.literal("§cYour data is being restored by an administrator.\n§7Please log back in to apply the backup."));
         }
