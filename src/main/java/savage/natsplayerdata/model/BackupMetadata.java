@@ -7,7 +7,7 @@ import com.fasterxml.jackson.annotation.JsonProperty;
  */
 public record BackupMetadata(
     @JsonProperty("s") String serverId,
-    @JsonProperty("r") String reason,      // MANUAL, AUTO, PRE_RESTORE
+    @JsonProperty("r") String reason,      // MANUAL, AUTO
     @JsonProperty("t") String tag,         // Optional label
     @JsonProperty("v") String modVersion,
     @JsonProperty("d") String dimension,
@@ -15,5 +15,4 @@ public record BackupMetadata(
 ) {
     public static final String REASON_MANUAL = "MANUAL";
     public static final String REASON_AUTO = "AUTO";
-    public static final String REASON_PRE_RESTORE = "PRE_RESTORE";
 }
