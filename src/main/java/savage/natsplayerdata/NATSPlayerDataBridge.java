@@ -65,6 +65,11 @@ public class NATSPlayerDataBridge implements ModInitializer {
 		HandshakeEvents.register();
 		BridgeCommands.register();
 
+		// Register with NATS-Fabric shutdown coordination.
+		// Tells the library to wait for this mod to finish pushing data before closing.
+		// 30s minimum: allows time to drain all online players' data on shutdown.
+		savage.natsfabric.NatsManager.getInstance().registerClient(MOD_ID, 30);
+
 		// Register NATS-Fabric connection recovery hook
 		savage.natsfabric.event.NatsConnectionEvents.RECONNECTED.register((conn) -> {
 			LOGGER.info("Cluster: NATS connection RESTORED. Re-arming RPC and reconciling local vault...");
