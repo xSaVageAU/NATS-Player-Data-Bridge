@@ -1,0 +1,3 @@
+[submodule "deps/NATS-Fabric"]
+	path = deps/NATS-Fabric
+	url = https://github.com/xSaVageAU/NATS-Fabric
