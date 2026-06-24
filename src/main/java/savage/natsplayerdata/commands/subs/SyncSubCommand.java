@@ -27,8 +27,13 @@ public class SyncSubCommand {
     }
 
     private static int execute(CommandSourceStack source, ServerPlayer player) {
-        DataMergeService.prepareAndPush(player, source.getServer(), false);
-        source.sendSuccess(() -> Component.literal("§aCluster bundle successfully pushed for " + player.getName().getString()), true);
+        source.sendSuccess(() -> Component.literal("§7Initiating data sync for §e" + player.getName().getString() + "§7..."), false);
+        DataMergeService.prepareAndPush(player, source.getServer(), false)
+            .thenRun(() -> source.sendSuccess(() -> Component.literal("§aCluster bundle successfully pushed for §e" + player.getName().getString()), true))
+            .exceptionally(ex -> {
+                source.sendFailure(Component.literal("§cFailed to sync data for §e" + player.getName().getString() + "§c: " + ex.getMessage()));
+                return null;
+            });
         return 1;
     }
 }

@@ -4,11 +4,15 @@ import com.mojang.brigadier.builder.LiteralArgumentBuilder;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
 import net.minecraft.network.chat.Component;
+import savage.natsfabric.NatsManager;
 import savage.natsplayerdata.session.SessionManager;
 import savage.natsplayerdata.model.PlayerState;
 import savage.natsplayerdata.storage.SessionStorage;
+import savage.natsplayerdata.storage.StorageLifecycleManager;
 
+import java.time.Duration;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
 
 /**
  * Handles cluster-wide session and lock management.
@@ -41,7 +45,7 @@ public class SessionSubCommand {
             .toList();
 
         if (dirtySessions.isEmpty()) {
-            source.sendSuccess(() -> Component.literal("§aNo DIRTY sessions found. Cluster is healthy!"), false);
+            source.sendSuccess(() -> Component.literal("§aNo DIRTY sessions found. Cluster is healthy! §8(Total tracked: " + allSessions.size() + ")"), false);
             return 1;
         }
 
@@ -53,7 +57,7 @@ public class SessionSubCommand {
         int start = (currentPage - 1) * pageSize;
         int end = Math.min(start + pageSize, total);
 
-        source.sendSuccess(() -> Component.literal("§b--- Found " + total + " Dirty Sessions (Page " + currentPage + "/" + totalPages + ") ---"), false);
+        source.sendSuccess(() -> Component.literal("§b--- Found " + total + " Locked Sessions §8(Total tracked: " + allSessions.size() + ") §b(Page " + currentPage + "/" + totalPages + ") ---"), false);
         
         for (int i = start; i < end; i++) {
             var entry = dirtySessions.get(i);
@@ -101,12 +105,57 @@ public class SessionSubCommand {
         }
 
         if (targetUuid == null) {
-            source.sendFailure(Component.literal("§cCould not find a session for: " + target));
+            source.sendFailure(Component.literal("§cCould not find an active cluster session for: " + target));
             return 0;
         }
 
+        // Safety: Never clear session for a player currently online on this server
+        if (source.getServer().getPlayerList().getPlayer(targetUuid) != null) {
+            source.sendFailure(Component.literal("§cCannot clean session: Player §e" + targetName + " §cis currently online on this server!"));
+            return 0;
+        }
+
+        final UUID finalUuid = targetUuid;
         final String finalTargetName = targetName;
-        SessionManager.setSessionState(targetUuid, targetName, PlayerState.CLEAN);
+
+        var entryOpt = SessionStorage.getInstance().fetchSession(targetUuid);
+        if (entryOpt.isPresent()) {
+            var session = entryOpt.get().state();
+            if (session.state() == PlayerState.DIRTY) {
+                String lastServer = session.lastServer();
+                source.sendSuccess(() -> Component.literal("§7Querying status of §e" + finalTargetName + " §7on §f" + lastServer + "§7..."), false);
+                
+                CompletableFuture.runAsync(() -> {
+                    var conn = NatsManager.getInstance().getConnection();
+                    if (conn == null) {
+                        source.sendFailure(Component.literal("§cError: NATS connection not available."));
+                        return;
+                    }
+                    
+                    byte[] response = null;
+                    try {
+                        var reply = conn.request("session.query." + lastServer, finalUuid.toString().getBytes(), Duration.ofSeconds(1));
+                        if (reply != null) {
+                            response = reply.getData();
+                        }
+                    } catch (Exception ignored) {}
+
+                    if (response != null && "ONLINE".equals(new String(response))) {
+                        source.sendFailure(Component.literal("§cCannot clean session: Player is actively online on server §e" + lastServer + "§c. Ask them to disconnect first!"));
+                    } else {
+                        // Either replied OFFLINE or request timed out (server crashed)
+                        if (response == null) {
+                            source.sendSuccess(() -> Component.literal("§e[!] Server §f" + lastServer + " §edid not respond. Assuming ghost lock from server crash."), true);
+                        }
+                        SessionManager.setSessionState(finalUuid, finalTargetName, PlayerState.CLEAN);
+                        source.sendSuccess(() -> Component.literal("§aSuccessfully marked session for §e" + finalTargetName + "§a as CLEAN."), true);
+                    }
+                }, StorageLifecycleManager.VIRTUAL_EXECUTOR);
+                return 1;
+            }
+        }
+
+        SessionManager.setSessionState(finalUuid, finalTargetName, PlayerState.CLEAN);
         source.sendSuccess(() -> Component.literal("§aSuccessfully marked session for §e" + finalTargetName + "§a as CLEAN."), true);
         return 1;
     }

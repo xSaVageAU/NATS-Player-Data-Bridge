@@ -6,6 +6,10 @@ import net.minecraft.commands.Commands;
 import net.minecraft.network.chat.Component;
 import savage.natsfabric.NatsManager;
 import savage.natsplayerdata.NATSPlayerDataBridge;
+import savage.natsplayerdata.storage.PersistenceService;
+
+import java.util.UUID;
+import java.util.stream.Stream;
 
 /**
  * Handles administrative status and diagnostic commands.
@@ -57,6 +61,18 @@ public class AdminSubCommand {
         source.sendSuccess(() -> Component.literal("§7Status: " + (connected ? "§aCONNECTED" : "§cDISCONNECTED")), false);
         source.sendSuccess(() -> Component.literal("§7Server Node: §f" + serverName), false);
         
+        // Local Disk Vault Diagnostics
+        boolean hasVault = PersistenceService.hasPendingSyncs();
+        if (hasVault) {
+            long count;
+            try (Stream<UUID> uuids = PersistenceService.getPendingUUIDs()) {
+                count = uuids.count();
+            }
+            source.sendSuccess(() -> Component.literal("§c[!] Local Vault: §e" + count + " player(s) pending recovery"), false);
+        } else {
+            source.sendSuccess(() -> Component.literal("§7Local Vault: §aCLEAN"), false);
+        }
+
         if (config != null) {
             source.sendSuccess(() -> Component.literal("§7Data Bucket: §e" + config.dataBucketName), false);
             source.sendSuccess(() -> Component.literal("§7Backup Bucket: §e" + config.backupBucketName), false);

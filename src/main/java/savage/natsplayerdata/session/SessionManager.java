@@ -40,8 +40,19 @@ public class SessionManager {
 
         rpcDispatcher = conn.createDispatcher((msg) -> {
             try {
+                String subject = msg.getSubject();
                 String uuidStr = new String(msg.getData());
                 UUID targetUuid = UUID.fromString(uuidStr);
+                
+                if (subject != null && subject.startsWith("session.query.")) {
+                    var player = server.getPlayerList().getPlayer(targetUuid);
+                    if (player != null) {
+                        conn.publish(msg.getReplyTo(), "ONLINE".getBytes());
+                    } else {
+                        conn.publish(msg.getReplyTo(), "OFFLINE".getBytes());
+                    }
+                    return;
+                }
                 
                 NATSPlayerDataBridge.LOGGER.info("Cluster: Received lock release request for {}", targetUuid);
                 
@@ -92,7 +103,8 @@ public class SessionManager {
         });
         
         rpcDispatcher.subscribe("session.release." + localServerId);
-        NATSPlayerDataBridge.LOGGER.info("Cluster: RPC Lock Release Listener armed on 'session.release.{}'", localServerId);
+        rpcDispatcher.subscribe("session.query." + localServerId);
+        NATSPlayerDataBridge.LOGGER.info("Cluster: RPC Lock Listeners armed on release & query for server '{}'", localServerId);
     }
 
     /**
